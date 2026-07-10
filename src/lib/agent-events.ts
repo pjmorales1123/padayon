@@ -9,6 +9,7 @@ export interface AgentEvent {
     | "profile"
     | "retrieve"
     | "research"
+    | "mastery"
     | "create_materials"
     | "teach"
     | "memory"

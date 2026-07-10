@@ -29,6 +29,51 @@ const RETRIEVAL_INTENTS = [
   "continue_learning",
 ];
 
+function computeMasteryUpdate(
+  current: Record<string, unknown> | null,
+  intent: string,
+  quizResult: { correct: boolean; topic: string; question?: string } | null,
+  message: string
+): Record<string, unknown> {
+  const p = current || {};
+  let confidence = typeof p.confidence === "number" ? p.confidence : 0;
+  let attempts = typeof p.attempts === "number" ? p.attempts : 0;
+  let correctCount = typeof p.correct === "number" ? p.correct : 0;
+  let incorrectCount = typeof p.incorrect === "number" ? p.incorrect : 0;
+  let interactions = typeof p.interactions === "number" ? p.interactions : 0;
+
+  interactions++;
+
+  if (quizResult) {
+    attempts++;
+    if (quizResult.correct) {
+      correctCount++;
+      confidence = Math.min(100, confidence + 20);
+    } else {
+      incorrectCount++;
+      confidence = Math.max(0, confidence - 10);
+    }
+  } else if (intent === "teach_topic") {
+    const positive = /got it|understand|cool|thanks|ah okay|masabtan|naintindihan|i see|makes sense|that's right|yes/i.test(message);
+    const negative = /don't get|confused|hard|dumb|wala ko kasabot|hindi ko gets|i don't understand|i'm lost/i.test(message);
+    if (positive) confidence = Math.min(100, confidence + 10);
+    if (negative) confidence = Math.max(0, confidence - 5);
+  } else if (["make_quiz", "make_flashcards", "retrieve_material", "continue_learning"].includes(intent)) {
+    confidence = Math.min(100, confidence + 5);
+  }
+
+  const status = confidence >= 80 ? "mastered" : confidence >= 40 ? "developing" : "started";
+  return {
+    confidence,
+    attempts,
+    correct: correctCount,
+    incorrect: incorrectCount,
+    interactions,
+    status,
+    last_studied_at: new Date().toISOString(),
+  };
+}
+
 function mapIntentToType(intent: string, message: string): string | null {
   if (intent === "make_flashcards") return "flashcards";
   if (intent === "make_quiz") return "quiz";
@@ -534,7 +579,24 @@ export async function POST(req: NextRequest) {
     });
     logStep(requestId, "save_reply", "Reply saved", "done");
 
-    // 9. Update learner profile in the background so the user doesn't wait
+    // 9. Update topic mastery / progress
+    if (topic) {
+      logStep(requestId, "mastery", "Updating topic mastery", "running");
+      const newProgress = computeMasteryUpdate(
+        (topic.progress as Record<string, unknown>) || null,
+        classification.intent,
+        quizResult || null,
+        message
+      );
+      await supabaseAdmin!
+        .from("topics")
+        .update({ progress: newProgress, last_studied_at: new Date().toISOString() })
+        .eq("id", topic.id);
+      topic.progress = newProgress;
+      logStep(requestId, "mastery", `Mastery updated to ${newProgress.confidence}% (${newProgress.status})`, "done", { progress: newProgress });
+    }
+
+    // 10. Update learner profile in the background so the user doesn't wait
     if (shouldCreateMaterials || shouldTeach) {
       applyMemoryUpdate(requestId, userId, message, quizResult, classification, profileRow, preferredModel);
     }

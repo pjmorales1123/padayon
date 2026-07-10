@@ -16,6 +16,13 @@ interface Topic {
   title: string;
   subcategory: string;
   materials: Material[];
+  progress?: {
+    confidence?: number;
+    status?: string;
+    attempts?: number;
+    correct?: number;
+    incorrect?: number;
+  } | null;
 }
 
 interface Subject {
@@ -201,19 +208,41 @@ function LibraryInner() {
                 {(subject.topics || []).length === 0 && (
                   <p className="text-sm text-slate-400">No topics yet. Start studying in chat.</p>
                 )}
-                {(subject.topics || []).map((topic) => (
+                {(subject.topics || []).map((topic) => {
+                  const confidence = topic.progress?.confidence ?? 0;
+                  const status = topic.progress?.status || "started";
+                  const statusColor =
+                    status === "mastered" ? "bg-emerald-500" : status === "developing" ? "bg-amber-500" : "bg-blue-500";
+                  return (
                   <div
                     key={topic.id}
                     className="flex items-start justify-between rounded-xl border border-slate-100 bg-slate-50 p-3"
                   >
                     <div className="flex-1">
-                      <Link
-                        href={`/topic/${topic.id}?userId=${userId}`}
-                        className="font-semibold text-slate-800 hover:text-blue-600"
-                      >
-                        {topic.subcategory ? `${topic.subcategory} → ` : ""}
-                        {topic.title}
-                      </Link>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          href={`/topic/${topic.id}?userId=${userId}`}
+                          className="font-semibold text-slate-800 hover:text-blue-600"
+                        >
+                          {topic.subcategory ? `${topic.subcategory} → ` : ""}
+                          {topic.title}
+                        </Link>
+                        <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 border border-slate-200">
+                          {status}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                          <span>Mastery {confidence}%</span>
+                          <span>{topic.progress?.correct ?? 0}/{topic.progress?.attempts ?? 0} correct</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                          <div
+                            className={`h-full ${statusColor} transition-all`}
+                            style={{ width: `${confidence}%` }}
+                          />
+                        </div>
+                      </div>
                       <div className="ml-4 mt-2 flex flex-wrap gap-2">
                         {(topic.materials || []).map((m) => (
                           <Link
@@ -233,7 +262,7 @@ function LibraryInner() {
                       Delete
                     </button>
                   </div>
-                ))}
+                ); })}
               </div>
             )}
           </div>
