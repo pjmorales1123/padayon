@@ -27,11 +27,11 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 
 ## How it uses AMD / Fireworks / Gemma
 
-- **AI Runtime:** Fireworks AI API (AMD-hardware hosted models) + optional Gemma endpoint
-- **Default Models:** `deepseek-v4-flash` / `kimi-k2p5` — fast, serverless, AMD-hosted fallback
-- **Gemma Toggle:** The chat UI lets you switch to **Gemma 3** or **Gemma 4** on demand
-- **Architecture:** Separate agent prompts sent to the model for classification, curriculum alignment, material creation, teaching, and memory updates
-- **Fallback:** If Gemma is unreachable, PADAYON automatically falls back to the serverless model so the demo never breaks
+- **AI Runtime:** Fireworks AI API — Fireworks is an AMD partner and hosts fast, serverless models on AMD infrastructure, used here as the reliable production runtime.
+- **Default Models:** `deepseek-v4-flash` / `kimi-k2p5` — fast, serverless Fireworks models that power the agent pipeline and fallback.
+- **Gemma Toggle:** The chat UI lets you switch to **Gemma 3** or **Gemma 4** when a Gemma endpoint is available (Fireworks on-demand or AMD Developer Cloud GPU pod).
+- **Architecture:** Separate agent prompts sent to the model for classification, curriculum alignment, material creation, teaching, and memory updates.
+- **Fallback:** If Gemma is unreachable, PADAYON automatically falls back to the Fireworks serverless model so the demo never breaks.
 
 ## Agent Architecture
 
@@ -116,9 +116,16 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 
 ## Gemma Demo Setup
 
-Serverless Gemma is not currently available on every Fireworks account, so the toggle expects a deployed Gemma endpoint. For the hackathon demo we are using **Gemma 4 31B Instruct** via Fireworks on-demand.
+The production architecture is AMD-ready through Fireworks AI (an AMD partner) and AMD Developer Cloud. The current demo uses available Fireworks serverless models for reliability, with Gemma endpoints supported when accessible.
 
-### Fireworks on-demand (used for this demo)
+### AMD Developer Cloud GPU pod (best for the AMD track)
+
+1. Deploy Gemma 4 on your allocated AMD GPU pod (vLLM + ROCm or Ollama).
+2. Copy the pod's chat completions URL into `GEMMA_4_ENDPOINT`.
+3. Set `GEMMA_API_KEY` if needed.
+4. In the chat UI, choose **Gemma 4**. If the endpoint is unreachable, PADAYON falls back to the Fireworks serverless model.
+
+### Fireworks on-demand (alternative if AMD pod is not available)
 
 1. Create a deployment (run this in a terminal with `FIREWORKS_API_KEY` set):
    ```bash
@@ -127,20 +134,17 @@ Serverless Gemma is not currently available on every Fireworks account, so the t
      -H "Content-Type: application/json" \
      -d '{
        "baseModel": "accounts/fireworks/models/gemma-4-31b-it",
-       "acceleratorType": "NVIDIA_H200_141GB",
        "acceleratorCount": 1,
        "minReplicaCount": 0,
        "maxReplicaCount": 1,
        "autoscalingPolicy": { "scaleToZeroWindow": "300s" }
      }'
    ```
-2. Copy the returned deployment name (e.g., `accounts/<account>/deployments/<id>`) into `GEMMA_4_DEPLOYMENT`.
+2. Copy the returned deployment name into `GEMMA_4_DEPLOYMENT`.
 3. Restart the app so it picks up the env var.
 4. In the chat UI, choose **Gemma 4**. If the deployment is scaled down or fails, PADAYON automatically falls back to the serverless model.
 
 ### Scale to zero between sessions (important — on-demand GPUs bill by uptime)
-
-Use the helper script:
 
 ```bash
 # Scale down to stop billing
@@ -152,12 +156,6 @@ node scripts/gemma4-scale.js status
 # Scale up before a demo (then wait ~2–4 minutes for READY)
 node scripts/gemma4-scale.js up
 ```
-
-### AMD Developer Cloud GPU pod (best for the AMD track)
-
-1. Deploy Gemma 4 on your allocated AMD GPU pod (vLLM + ROCm or Ollama).
-2. Copy the pod's chat completions URL into `GEMMA_4_ENDPOINT`.
-3. Set `GEMMA_API_KEY` if needed.
 
 ### Fallback only
 

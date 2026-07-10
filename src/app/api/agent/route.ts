@@ -29,6 +29,96 @@ const RETRIEVAL_INTENTS = [
   "continue_learning",
 ];
 
+const VALID_INTENTS = new Set([
+  "create_study_pack",
+  "teach_topic",
+  "make_flashcards",
+  "make_reviewer",
+  "make_quiz",
+  "make_story",
+  "retrieve_material",
+  "continue_learning",
+  "research_topics",
+  "unknown",
+]);
+
+interface ActiveTopic {
+  topicId: string;
+  topicTitle: string;
+  subcategory: string | null;
+  subjectId: string;
+  subjectName: string;
+}
+
+async function getLastActiveTopic(userId: string): Promise<ActiveTopic | null> {
+  const { data: rows, error } = await supabaseAdmin!
+    .from("topics")
+    .select("id, title, subcategory, subject_id, subjects(id, name)")
+    .eq("subjects.user_id", userId)
+    .order("last_studied_at", { ascending: false })
+    .limit(1);
+  if (error || !rows || rows.length === 0) return null;
+  const row = rows[0];
+  const subject = Array.isArray(row.subjects) ? row.subjects[0] : row.subjects;
+  if (!subject) return null;
+  return {
+    topicId: row.id,
+    topicTitle: row.title,
+    subcategory: row.subcategory,
+    subjectId: row.subject_id,
+    subjectName: subject.name,
+  };
+}
+
+function normalizeClassification(
+  requestId: string,
+  classification: { subject: string; subcategory: string; topic: string; intent: string; language_detected: string; confidence: number },
+  lastActive: ActiveTopic | null
+): { subject: string; subcategory: string; topic: string; intent: string; language_detected: string; confidence: number } {
+  const lowerIntent = (classification.intent || "").toLowerCase().trim().replace(/\s+/g, "_");
+  let intent = VALID_INTENTS.has(lowerIntent) ? lowerIntent : "unknown";
+
+  const message = classification.topic || "";
+  const isRetrievalLike = RETRIEVAL_INTENTS.includes(intent) || /show my|my flashcards|my quiz|my notes|my reviewer|continue|review this|reviewer/i.test(message);
+
+  let subject = (classification.subject || "").trim();
+  let subcategory = (classification.subcategory || "").trim();
+  let topic = (classification.topic || "").trim();
+
+  // If retrieval/continue intent lacks a clear topic, fall back to the last active topic.
+  if (isRetrievalLike && lastActive && (subject === "Unknown" || subject === "" || topic === "Unknown" || topic === "" || topic.length < 2)) {
+    subject = lastActive.subjectName;
+    subcategory = lastActive.subcategory || subcategory || "General";
+    topic = lastActive.topicTitle;
+    if (intent === "unknown") intent = "retrieve_material";
+    logStep(requestId, "classify", `Fell back to last active topic: ${subject} → ${subcategory} → ${topic}`, "done");
+  }
+
+  // Guard against Unknown subject for obvious keyword topics.
+  if (subject === "Unknown" || subject === "") {
+    const lower = message.toLowerCase();
+    if (/photosynthesis|chlorophyll|cellular respiration|ecosystem|biology|cell|organism/.test(lower)) subject = "Science";
+    else if (/quadratic|factoring|polynomial|algebra|equation|geometry/.test(lower)) subject = "Math";
+    else if (/irony|characterization|point of view|metaphor|simile|theme|plot/.test(lower)) subject = "English";
+    else if (/history|government|democracy|economy|culture|revolution|philippines/.test(lower)) subject = "Social Studies";
+    else if (/computer|programming|code|html|css|javascript|python|database/.test(lower)) subject = "ICT";
+    else if (/music|art|dance|physical education|health|nutrition/.test(lower)) subject = "MAPEH";
+    else if (/tula|sanaysay|pandiwa|pang-uri|pang-abay|pilipinas/.test(lower)) subject = "Filipino";
+  }
+
+  // Ensure subcategory is never empty.
+  if (!subcategory) subcategory = "General";
+
+  return {
+    subject,
+    subcategory,
+    topic,
+    intent,
+    language_detected: (classification.language_detected || "English").trim(),
+    confidence: typeof classification.confidence === "number" ? classification.confidence : 0.7,
+  };
+}
+
 function computeMasteryUpdate(
   current: Record<string, unknown> | null,
   intent: string,
@@ -290,9 +380,15 @@ export async function POST(req: NextRequest) {
 
     logStep(requestId, "profile", "Loaded conversation history", "done", { historyMessages: history.length });
 
-    // 2. Classifier Agent with history context
+    // 2. Load last active topic for retrieval fallback
+    logStep(requestId, "profile", "Loading last active topic for retrieval fallback", "running");
+    const lastActiveTopic = await getLastActiveTopic(userId);
+    logStep(requestId, "profile", "Last active topic loaded", "done", { lastActive: lastActiveTopic ? `${lastActiveTopic.subjectName} → ${lastActiveTopic.topicTitle}` : "none" });
+
+    // 3. Classifier Agent with history context
     logStep(requestId, "classify", "Classifier Agent: detecting subject, topic & intent", "running");
     let classification = await classifierAgent(message, history, preferredModel);
+    classification = normalizeClassification(requestId, classification, lastActiveTopic);
 
     // If this message is a quiz follow-up, keep the quiz topic so feedback stays in context.
     if (quizResult?.topic) {

@@ -207,13 +207,14 @@ add_content_slide(prs,
 
 # 8. Gemma + AMD
 add_content_slide(prs,
-    "Powered by Gemma on AMD / Fireworks AI",
+    "AMD-Ready Architecture with Gemma Support",
     [
-        "Default pipeline runs on Fireworks AI serverless models (AMD-hosted DeepSeek-V4 / Kimi-K2.5).",
-        "Demo toggle switches to Gemma 4 31B Instruct via Fireworks on-demand for high-quality teaching.",
-        "Automatic fallback keeps the demo stable if Gemma is scaled down or unavailable.",
-        "Built with Next.js + Supabase + Tailwind, containerized with Docker for submission.",
-        "Qualifies for both Unicorn Track and Best AMD-Hosted Gemma Project ($2,000 prize)."
+        "Production runtime: Fireworks AI API — Fireworks is an AMD partner hosting fast, serverless models on AMD infrastructure.",
+        "Default pipeline uses Fireworks serverless models (DeepSeek-V4 / Kimi-K2.5) for reliability and speed.",
+        "Demo toggle switches to Gemma 3/4 when an endpoint is available via Fireworks on-demand or AMD Developer Cloud GPU pod.",
+        "Automatic fallback keeps the demo stable if Gemma is unreachable.",
+        "Containerized with Docker and built with Next.js + Supabase + Tailwind.",
+        "Competes in Unicorn Track and Best AMD-Hosted Gemma Project."
     ])
 
 # 9. Demo flow
