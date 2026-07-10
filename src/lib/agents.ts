@@ -54,7 +54,11 @@ function keywordClassification(message: string): Classification {
 
   const retrieval = lower.includes("flashcard") || lower.includes("quiz") || lower.includes("reviewer") || lower.includes("review") || lower.includes("show my") || lower.includes("my flashcards") || lower.includes("my quiz") || lower.includes("my notes") || lower.includes("summary");
   const explicitCreation = lower.includes("create") || lower.includes("make") || lower.includes("build") || lower.includes("organize") || lower.includes("study pack") || lower.includes("notes");
-  const intent: Classification["intent"] = retrieval ? "retrieve_material" : explicitCreation ? "create_study_pack" : "teach_topic";
+  const research = /didn't listen|missed the lesson|wala ko nakadungog|wala ko namatikdan|related topics|what did we talk about|what did you discuss|what topics|unsa among gisaysay|unsa among gipasabot/i.test(lower);
+  let intent: Classification["intent"] = "teach_topic";
+  if (research) intent = "research_topics";
+  else if (retrieval) intent = "retrieve_material";
+  else if (explicitCreation) intent = "create_study_pack";
 
   const scienceKeywords = ["photosynthesis", "chlorophyll", "cellular respiration", "ecosystem", "cell", "organism", "mitosis", "meiosis", "genetics", "atom", "molecule", "periodic"];
   const mathKeywords = ["quadratic", "factoring", "formula", "polynomial", "equation", "algebra", "geometry", "fraction", "percent", "ratio", "function"];
@@ -123,7 +127,7 @@ Analyze the student input and return ONLY valid JSON with exactly these fields:
 - subject (Science, Math, English, Filipino, ICT, Social Studies, MAPEH, or Unknown)
 - subcategory
 - topic (a short, specific topic title)
-- intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_story, retrieve_material, continue_learning, unknown)
+- intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_story, retrieve_material, continue_learning, research_topics, unknown)
 - language_detected (English, Filipino, Cebuano, Cebuano-English mix, Filipino-English mix, Other)
 - confidence (number 0.0-1.0)
 
@@ -132,6 +136,7 @@ Intent rules:
 - Use "create_study_pack" ONLY when the student provides notes/material to organize or explicitly asks for a full study pack (e.g., "make me a reviewer", "organize my notes", "create a study pack").
 - Use "retrieve_material" ONLY when the student explicitly asks to see existing saved materials (e.g., "show my flashcards", "where is my quiz", "my summary"). Do NOT use it for general questions like "look at" or "tell me about".
 - Use "continue_learning" when the student clearly returns to a previous topic (e.g., "continue", "go back to").
+- Use "research_topics" when the student missed a lesson, is unsure what topic to study, or asks what was discussed (e.g., "I didn't listen earlier, what did we talk about?", "wala ko nakadungog sa lesson ganina", "show me related topics", "what topics are in this subject?").
 - Use "unknown" only if you cannot determine the subject or topic at all.
 
 language_detected must be one of: English, Filipino, Cebuano, Cebuano-English mix, Filipino-English mix, Other.
@@ -221,6 +226,45 @@ Detected: ${JSON.stringify(classification)}`;
     previous_topic: null,
     next_topic: null,
   };
+}
+
+export async function researchAgent(
+  message: string,
+  classification: Classification,
+  curriculumItems: Array<{ subject: string; topic: string; competency: string }>,
+  profile: Record<string, unknown>,
+  model: ModelPreference = "auto"
+): Promise<string> {
+  const prompt = `You are the Research Agent for PADAYON, an AI learning partner for Filipino students.
+
+The student missed a lesson or is unsure what to study. Your job is to show them the most relevant topics and let them pick one to start with.
+
+Student message: "${message}"
+Detected subject: ${classification.subject}
+Detected language: ${classification.language_detected}
+
+${curriculumItems.length > 0
+      ? `Here are curriculum topics that may be related:\n${curriculumItems
+          .slice(0, 12)
+          .map((c, i) => `${i + 1}. ${c.topic} (${c.subject}) — ${c.competency}`)
+          .join("\n")}`
+      : "No specific curriculum items were found."}
+
+Learner profile: ${JSON.stringify(profile)}
+
+Instructions:
+- Use the student's strongest language(s) based on their profile. If the profile shows high confidence in both English and Cebuano/Filipino, give the response in both languages side by side.
+- Pick the 3–5 most relevant topics from the list and present them as a numbered list.
+- Add a one-sentence reason for each topic.
+- Ask the student to type the number or name of the topic they want to start with.
+- If there are no curriculum items, ask the student what subject or lesson title they discussed, and suggest a few general study areas.
+- Keep it short, friendly, and focused on learning.
+- Do not create materials yet. Just help the student choose a topic.`;
+
+  const content = await callFireworks([{ role: "user", content: prompt }], false, 2000, model);
+  if (content && content.trim().length > 10) return content;
+
+  return `It looks like you missed a lesson. Can you tell me the subject or any word you remember from class? Then I can show you the topics we can study.`;
 }
 
 export async function materialCreatorAgent(
@@ -329,7 +373,7 @@ export async function teachingAgent(
 Your goal is to help the student understand, not just give answers. Adapt your response to the learner profile below — it works for any student.
 
 How to adapt:
-- Language: Respond in the language the student just used (detected: ${classification?.language_detected || "English"}). If the student wrote in English, reply in English even if their profile lists another language as strong. Only use Filipino/Cebuano when the student's actual message is in Filipino/Cebuano.
+- Language: Detect the language the student just used (${classification?.language_detected || "English"}). Then check their learner profile language_confidence. If the profile shows high confidence in two or more languages (for example, both English and Cebuano, or English and Filipino), give a bilingual response: explain the idea in the student's home language first, then repeat the key point in English, and always include the English academic term **${topic}**. If the profile only shows high confidence in one language, reply mainly in that language while still including the English academic term. If there is no profile yet, reply in the language the student used.
 - Learning style: Check learning_style. Use the preferred methods (e.g., analogies, visuals, stories, short steps, real-life examples).
 - Strengths: Build on the student's strengths.
 - Weaknesses: Be gentle and scaffold. If a weakness is mentioned, give extra support in that area.

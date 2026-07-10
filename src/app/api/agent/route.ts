@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import {
   classifierAgent,
   curriculumAgent,
+  researchAgent,
   materialCreatorAgent,
   teachingAgent,
   memoryAgent,
@@ -270,7 +271,43 @@ export async function POST(req: NextRequest) {
       logStep(requestId, "classify", `Detected: ${classification.subject} → ${classification.subcategory} → ${classification.topic}`, "done", { classification });
     }
 
-    // 3. Curriculum Alignment Agent
+    // 3. Research / topic recovery path
+    if (classification.intent === "research_topics") {
+      logStep(requestId, "research", "Research Agent: finding related topics", "running");
+
+      let curriculumQuery = supabaseAdmin!.from("curriculum_items").select("subject,topic,competency").limit(20);
+      if (classification.subject && classification.subject !== "Unknown") {
+        curriculumQuery = curriculumQuery.ilike("subject", classification.subject);
+      }
+      const { data: curriculumItems } = await curriculumQuery;
+
+      const { data: profileRow } = await supabaseAdmin!
+        .from("learner_profiles")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+
+      const reply = await researchAgent(
+        message,
+        classification,
+        (curriculumItems || []) as Array<{ subject: string; topic: string; competency: string }>,
+        (profileRow as Record<string, unknown>) || {},
+        preferredModel
+      );
+
+      await supabaseAdmin!.from("messages").insert({
+        user_id: userId,
+        topic_id: null,
+        role: "assistant",
+        content: reply,
+      });
+
+      logStep(requestId, "research", "Suggested related topics", "done", { topics: curriculumItems?.length || 0 });
+      logStep(requestId, "finish", "Response complete", "done");
+      return NextResponse.json({ requestId, reply, classification, curriculum: null, topic: null, materials_created: [], saved_materials: [], interactive: null, memory_update: null });
+    }
+
+    // 4. Curriculum Alignment Agent
     logStep(requestId, "curriculum", "Curriculum Agent: aligning to Grade 9 competencies", "running");
     const curriculum = await curriculumAgent(classification, preferredModel);
     logStep(requestId, "curriculum", `Aligned to ${curriculum.grade_level} competency`, "done", { curriculum });
