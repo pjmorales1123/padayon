@@ -6,7 +6,7 @@
 
 - **Project Title:** PADAYON
 - **Short Description:** AI study partner that turns messy student notes into organized, curriculum-aligned learning materials.
-- **Long Description:** PADAYON is an agentic AI learning partner for Filipino students. It classifies student input, aligns it to the Grade 9 curriculum (Budget of Work), and automatically generates clean notes, flashcards, quizzes, summaries, and stories. It teaches in the student's strongest language — Cebuano, Filipino, or English — and remembers their strengths, weaknesses, and learning style across sessions. A live backend agent monitor shows judges exactly what each agent is doing and has done. Students can also talk to PADAYON with voice input/output, snap photos of handwritten notes with the camera, and switch between Gemma 4, Gemma 3, or auto fallback.
+- **Long Description:** PADAYON is an agentic AI learning partner for Filipino students. It classifies student input, aligns it to the Grade 9 curriculum (Budget of Work), and automatically generates clean notes, flashcards, quizzes, summaries, and stories. It teaches in the student's strongest language — Cebuano, Filipino, or English — and remembers their strengths, weaknesses, and learning style across sessions. A live backend agent monitor shows judges exactly what each agent is doing and has done. Students can snap photos of handwritten notes with the camera and switch between Gemma 4 (demo-only, on-demand) and auto fallback.
 - **Technology Tags:** Next.js, React, TypeScript, Tailwind CSS, Supabase, Fireworks AI, Gemma 4, AMD Developer Cloud, Docker, AI Agents
 - **Category:** AI Agents, Education, EdTech, Multilingual AI
 
@@ -15,7 +15,7 @@
 - **Live Demo:** https://gap-replace-coming-our.trycloudflare.com
 - **Pitch Deck:** https://gap-replace-coming-our.trycloudflare.com/deck
 - **Interactive Demo:** https://gap-replace-coming-our.trycloudflare.com/demo
-- **Public GitHub Repository:** *(create and paste link)*
+- **Public GitHub Repository:** https://github.com/pjmorales1123/padayon
 
 ## Submission Files
 
@@ -46,7 +46,7 @@
    - "Explain photosynthesis like I'm 10"
    - "Make flashcards for photosynthesis"
    - "Unsa ang photosynthesis? Dili ko kasabot sa English."
-5. Use the **🎤 mic button** to talk to PADAYON, or the **📷 camera button** to snap/upload handwritten notes.
+5. Use the **📷 camera button** to snap or upload handwritten notes.
 6. Watch the right-hand monitor show each agent's current task and completed work.
 7. Open `/deck` for the pitch slides.
 
