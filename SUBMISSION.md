@@ -12,9 +12,9 @@
 
 ## Application URLs
 
-- **Live Demo:** https://gap-replace-coming-our.trycloudflare.com
-- **Pitch Deck:** https://gap-replace-coming-our.trycloudflare.com/deck
-- **Interactive Demo:** https://gap-replace-coming-our.trycloudflare.com/demo
+- **Live Demo:** https://courtesy-bacon-post-internet.trycloudflare.com
+- **Pitch Deck:** https://courtesy-bacon-post-internet.trycloudflare.com/deck
+- **Interactive Demo:** https://courtesy-bacon-post-internet.trycloudflare.com/demo
 - **Public GitHub Repository:** https://github.com/pjmorales1123/padayon
 
 ## Submission Files
