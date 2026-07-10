@@ -1,55 +1,123 @@
-# Lablab.ai Submission — PADAYON
+# PADAYON — LabLab.ai / AMD Developer Hackathon: ACT II Submission Kit
 
-> Fill these fields on the [lablab.ai submission page](https://lablab.ai/ai-hackathons/amd-developer-hackathon-act-ii).
+## Submission URL
+https://lablab.ai/event/amd-developer-hackathon-act-ii
+
+## Track
+**Unicorn Track** — product/startup-oriented project
+
+Also competing for: **Best AMD-Hosted Gemma Project** ($2,000)
 
 ## Basic Information
 
-- **Project Title:** PADAYON
-- **Short Description:** AI study partner that turns messy student notes into organized, curriculum-aligned learning materials.
-- **Long Description:** PADAYON is an agentic AI learning partner for Filipino students. It classifies student input, aligns it to the Grade 9 curriculum (Budget of Work), and automatically generates clean notes, flashcards, quizzes, summaries, and stories. It teaches in the student's strongest language — Cebuano, Filipino, or English — and remembers their strengths, weaknesses, and learning style across sessions. A live backend agent monitor shows judges exactly what each agent is doing and has done. Students can snap photos of handwritten notes with the camera and switch between Gemma 4 (demo-only, on-demand) and auto fallback.
-- **Technology Tags:** Next.js, React, TypeScript, Tailwind CSS, Supabase, Fireworks AI, Gemma 4, AMD Developer Cloud, Docker, AI Agents
-- **Category:** AI Agents, Education, EdTech, Multilingual AI
+### Project Title
+PADAYON — AI Learning Partner for Filipino Students
 
-## Application URLs
+### Short Description (≤ 150 words)
+PADAYON turns messy student notes, photos, and questions into organized, curriculum-aligned study materials. It teaches Filipino students through translanguaging — Cebuano or Filipino first, then academic English — and remembers each learner's strengths, weaknesses, and progress across sessions. Built as a multi-agent system on Fireworks AI with Gemma 4 on AMD hardware.
 
-- **Live Demo:** https://courtesy-bacon-post-internet.trycloudflare.com
-- **Pitch Deck:** https://courtesy-bacon-post-internet.trycloudflare.com/deck
-- **Interactive Demo:** https://courtesy-bacon-post-internet.trycloudflare.com/demo
-- **Public GitHub Repository:** https://github.com/pjmorales1123/padayon
+### Long Description
+PADAYON is an AI learning partner designed for Filipino students who struggle with academic English, disorganized notes, and last-minute studying. Instead of simply answering questions, PADAYON organizes what the student gives it, aligns it to the Philippine curriculum, generates flashcards/quizzes/reviewers/summaries/stories, teaches in the learner's strongest language first, and tracks mastery over time.
 
-## Submission Files
+The backend runs seven specialized agents — Classifier, Curriculum Alignment, Organizer, Material Creator, Teaching, Assessment, and Memory — orchestrated through the Fireworks AI API. A chat toggle lets users switch to Gemma 4 31B Instruct for the demo, with automatic fallback to serverless models if the deployment is scaled down.
 
-- **Cover Image:** `public/screenshots/02-demo-with-events.png` — 1920×895 screenshot of `/demo` showing Gemma 4 active, the chat reply, and the live backend agent monitor at 91% pipeline progress.
-- **Demo Video:** *(record 2–3 minutes following `DEMO_SCRIPT.md`, upload to YouTube or Loom)*
-- **Slide Presentation:** use `/deck` or export screenshots from it
+The result is a working demo that shows real AI use in education: not shortcut answers, but structured, personalized learning.
 
-## Track
+### Technology Tags
+Next.js, Supabase, Tailwind CSS, Fireworks AI, Gemma, AMD Developer Cloud, Docker, AI Agents
 
-- **Primary Track:** Track 3 — Unicorn Track
-- **Award Target:** Best AMD-Hosted Gemma Project ($2,000)
+### Category Tags
+Education, EdTech, AI Agents, Natural Language Processing, Multilingual AI
 
-## Key Points for the Pitch
+---
 
-1. **Real problem:** Filipino students struggle with disorganized notes and academic English.
-2. **Agentic solution:** Classifier, curriculum, material creator, teacher, and memory agents work together.
-3. **Transparency:** Live agent monitor shows judges exactly what the AI is doing.
-4. **Multilingual:** Translanguaging support for Cebuano and Filipino.
-5. **Gemma 4:** On-demand deployment via Fireworks, with automatic fallback.
-6. **Market:** 28M+ students in the Philippines; scalable to other multilingual markets.
+## Cover Image
+Use `screenshots/padayon_home.png` or the first slide of `PADAYON_Pitch_Deck.pptx`.
 
-## What Judges Will See
+## Slide Presentation
+`PADAYON_Pitch_Deck.pptx` — 12 slides covering problem, solution, architecture, demo flow, Gemma/AMD integration, market potential, and links.
 
-1. Open `/` — clean landing page with feature grid.
-2. Open `/demo` — chat + live backend agent pipeline with per-agent status.
-3. Select **Gemma 4** in the chat header.
-4. Try prompts like:
-   - "Explain photosynthesis like I'm 10"
-   - "Make flashcards for photosynthesis"
-   - "Unsa ang photosynthesis? Dili ko kasabot sa English."
-5. Use the **📷 camera button** to snap or upload handwritten notes.
-6. Watch the right-hand monitor show each agent's current task and completed work.
-7. Open `/deck` for the pitch slides.
+## Video Presentation (recommended)
+Record a 2–3 minute screen demo using the live app:
+- Show messy notes → organized topic
+- Show Cebuano-first explanation
+- Show library with auto-generated materials
+- Show learning profile updates
+- Show Gemma toggle in the chat header
+- End with the live URL and GitHub link
 
-## Post-Submission Note
+## Public GitHub Repository
+https://github.com/pjmorales1123/padayon
 
-The Cloudflare tunnel URL is temporary. For a permanent submission URL, deploy the Docker container to Vercel, Render, Railway, or Google Cloud Run before judging begins.
+## Demo Application URL
+https://courtesy-bacon-post-internet.trycloudflare.com
+
+> Note: Cloudflare quick tunnels are temporary. For a permanent demo link, deploy to Vercel or run the Docker container on a persistent host.
+
+---
+
+## Key Pitch Points
+
+1. **Real problem, real data**
+   - PISA 2022: Philippines ranked 77/81; scores 347 reading, 355 math, 356 science vs OECD ~472–485.
+   - English-medium instruction in Science/Math is a documented barrier; MTB-MLE research shows mother-tongue-first learning improves comprehension.
+   - 85% of students already use AI for schoolwork, mostly for shortcuts; PADAYON redirects that habit toward real learning.
+
+2. **Complete working demo**
+   - Multi-agent backend, persistent memory, auto-organization, material generation, quiz scoring, mastery tracking.
+   - Live at the URL above.
+
+3. **Strong use of AMD / Fireworks / Gemma**
+   - Fireworks AI serverless models for fast fallback.
+   - Gemma 4 31B Instruct toggle for high-quality teaching demo.
+   - Docker containerized per submission requirements.
+
+4. **Differentiation**
+   - Translanguaging + curriculum alignment + long-term memory in one simple chat.
+   - Most AI education tools answer; PADAYON teaches and organizes.
+
+---
+
+## Demo Script for Video (2–3 min)
+
+1. **Home screen**: "PADAYON is an AI study partner for Filipino students."
+2. **Messy notes**: Type `photosynthesis chlorophyll sunlight CO2 oxygen glucose food important`.
+3. **Agent pipeline**: Watch the classifier detect Science → Biology → Photosynthesis, align to Grade 9 curriculum, and create materials.
+4. **Library**: Open Library to see the topic, progress bar, and generated tabs.
+5. **Translanguaging**: Ask `unsa diay ang photosynthesis?` and show Cebuano-first response.
+6. **Gemma toggle**: Switch the model dropdown to Gemma 4 and explain it runs on AMD/Fireworks infrastructure.
+7. **Profile**: Show the learning profile with updated strengths, weaknesses, and language confidence.
+8. **Retrieval**: Start a new chat and ask `show my flashcards`.
+9. **CTA**: Show GitHub repo and live URL.
+
+---
+
+## Quick Commands for Demo Day
+
+```bash
+# Start the app
+cd /c/Users/Admin/padayon
+npm start
+
+# Start tunnel (in another terminal)
+./cloudflared.exe tunnel --url http://localhost:3000
+
+# Scale up Gemma 4 before demo
+node scripts/gemma4-scale.js up
+# Wait 2–4 minutes until READY
+node scripts/gemma4-scale.js status
+
+# Scale down after demo to save credits
+node scripts/gemma4-scale.js down
+```
+
+---
+
+## Submission Checklist
+- [x] Public GitHub repo with README
+- [x] Dockerfile + .dockerignore
+- [x] Working demo URL
+- [x] Slide presentation (PPTX)
+- [x] Cover image
+- [ ] Video presentation (record on demo day)
+- [ ] Submit on lablab.ai before deadline

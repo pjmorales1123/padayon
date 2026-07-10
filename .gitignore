@@ -46,3 +46,8 @@ cloudflared.log
 
 # python cache
 __pycache__/
+venv/
+server.log
+webbridge-*.json
+ui-check.png
+persona-marathon.log
