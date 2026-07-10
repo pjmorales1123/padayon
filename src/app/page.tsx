@@ -93,9 +93,9 @@ export default function Home() {
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-8">
+    <main className="min-h-screen bg-slate-50">
       {health && !health.ready && (
-        <div className="mb-6 rounded-xl bg-amber-50 border border-amber-200 p-4 text-amber-900">
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-amber-900 max-w-3xl mx-auto mt-4 mx-4">
           <p className="font-semibold mb-1">Database not ready</p>
           <p className="text-sm mb-3">{health.message}</p>
           <button
@@ -109,58 +109,135 @@ export default function Home() {
         </div>
       )}
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">
-          {greeting}, {name}.
+      {/* Hero */}
+      <section className="max-w-5xl mx-auto px-4 pt-12 pb-10 text-center">
+        <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 text-blue-800 px-4 py-1.5 text-sm font-medium mb-6">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+          </span>
+          Built for AMD Developer Hackathon: ACT II — Gemma 4 + AMD GPUs
+        </div>
+        <h1 className="text-4xl sm:text-6xl font-extrabold text-slate-900 tracking-tight mb-6">
+          PADAYON
         </h1>
-        <p className="text-slate-600 text-lg">What are we studying today?</p>
-      </div>
+        <p className="text-xl sm:text-2xl text-slate-600 mb-4 max-w-2xl mx-auto">
+          An AI study partner that turns messy notes into organized, curriculum-aligned learning materials.
+        </p>
+        <p className="text-slate-500 mb-8 max-w-xl mx-auto">
+          For Filipino students who struggle with academic English, disorganized notes, and boring review sessions.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/demo"
+            className="w-full sm:w-auto rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 text-lg font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition"
+          >
+            See the live demo
+          </Link>
+          <Link
+            href="/chat"
+            className="w-full sm:w-auto rounded-2xl bg-white text-slate-700 border border-slate-300 px-8 py-4 text-lg font-semibold hover:bg-slate-50 transition"
+          >
+            Try the chat
+          </Link>
+        </div>
+      </section>
 
-      <Link
-        href="/chat"
-        className="block w-full rounded-2xl bg-white border border-slate-200 p-4 shadow-sm hover:shadow-md transition mb-8"
-      >
-        <div className="text-slate-400 text-sm">Type notes, ask a question, or upload material</div>
-      </Link>
+      {/* Feature grid */}
+      <section className="max-w-5xl mx-auto px-4 py-10">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { icon: "🧠", title: "Agent pipeline", body: "Classifier, curriculum, material creator, teacher & memory agents work together." },
+            { icon: "📸", title: "Photo to notes", body: "Snap a picture of handwritten notes and get clean flashcards, quizzes & summaries." },
+            { icon: "🌐", title: "Translanguaging", body: "Explains in Cebuano or Filipino first, then bridges to academic English." },
+            { icon: "📊", title: "Adaptive memory", body: "Learns your strengths, weaknesses, and style across every conversation." },
+          ].map((f) => (
+            <div key={f.title} className="rounded-2xl bg-white border border-slate-200 p-5 hover:shadow-md transition">
+              <div className="text-3xl mb-3">{f.icon}</div>
+              <h3 className="font-bold text-slate-900 mb-1">{f.title}</h3>
+              <p className="text-sm text-slate-600">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      {recentTopics.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-            Continue Learning
-          </h2>
-          <div className="grid gap-3">
-            {recentTopics.map((t) => (
-              <Link
-                key={t.id}
-                href={`/topic/${t.id}`}
-                className="block rounded-xl bg-white border border-slate-200 p-4 hover:shadow-md transition"
-              >
-                <div className="font-semibold text-slate-800">
-                  {t.subjectName}: {t.title}
+      {/* Demo preview / continue */}
+      <section className="max-w-5xl mx-auto px-4 pb-16">
+        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 shadow-sm">
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-slate-900 mb-3">
+                {greeting}, {name}.
+              </h2>
+              <p className="text-slate-600 mb-6">
+                Open the <strong>Live Demo</strong> to watch the agent pipeline classify your message, align it to the curriculum, and build a study pack in real time.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/demo"
+                  className="rounded-xl bg-blue-600 text-white px-5 py-3 font-semibold hover:bg-blue-700 transition"
+                >
+                  Open Live Demo →
+                </Link>
+                <Link
+                  href="/chat"
+                  className="rounded-xl bg-white text-slate-700 border border-slate-300 px-5 py-3 font-semibold hover:bg-slate-50 transition"
+                >
+                  Start chatting
+                </Link>
+              </div>
+            </div>
+
+            <div className="w-full lg:w-72 shrink-0">
+              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Continue Learning
+              </h3>
+              {recentTopics.length === 0 ? (
+                <p className="text-sm text-slate-500">No topics yet. Try the demo or chat to create one.</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentTopics.map((t) => (
+                    <Link
+                      key={t.id}
+                      href={`/topic/${t.id}`}
+                      className="block rounded-xl bg-slate-50 border border-slate-200 p-4 hover:border-blue-300 hover:bg-blue-50 transition"
+                    >
+                      <div className="font-semibold text-slate-800">
+                        {t.subjectName}: {t.title}
+                      </div>
+                      <div className="text-sm text-slate-500">{t.subcategory || ""}</div>
+                    </Link>
+                  ))}
                 </div>
-                <div className="text-sm text-slate-500">{t.subcategory || ""}</div>
-              </Link>
-            ))}
+              )}
+            </div>
           </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          href="/library"
-          className="block rounded-xl bg-white border border-slate-200 p-4 text-center hover:shadow-md transition"
-        >
-          <div className="font-semibold text-slate-800">Library</div>
-          <div className="text-sm text-slate-500">{subjects.length} subjects</div>
-        </Link>
-        <Link
-          href="/profile"
-          className="block rounded-xl bg-white border border-slate-200 p-4 text-center hover:shadow-md transition"
-        >
-          <div className="font-semibold text-slate-800">Learning Profile</div>
-          <div className="text-sm text-slate-500">Your progress</div>
-        </Link>
-      </div>
+        <div className="mt-6 grid grid-cols-3 gap-3 max-w-2xl mx-auto">
+          <Link
+            href="/library"
+            className="block rounded-xl bg-white border border-slate-200 p-4 text-center hover:shadow-md transition"
+          >
+            <div className="font-semibold text-slate-800">Library</div>
+            <div className="text-sm text-slate-500">{subjects.length} subjects</div>
+          </Link>
+          <Link
+            href="/profile"
+            className="block rounded-xl bg-white border border-slate-200 p-4 text-center hover:shadow-md transition"
+          >
+            <div className="font-semibold text-slate-800">Profile</div>
+            <div className="text-sm text-slate-500">Your progress</div>
+          </Link>
+          <Link
+            href="/demo"
+            className="block rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white border border-blue-600 p-4 text-center hover:shadow-md transition"
+          >
+            <div className="font-semibold">Live Demo</div>
+            <div className="text-sm text-blue-100">See agents work</div>
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }

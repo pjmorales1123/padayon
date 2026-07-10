@@ -35,6 +35,7 @@ export interface StudyPack {
   flashcards: Flashcard[];
   quiz: QuizItem[];
   summary: string;
+  story?: string;
 }
 
 export interface MemoryUpdate {
@@ -102,3 +103,46 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
+
+export interface InteractiveFlashcards {
+  type: "flashcards";
+  topic: string;
+  topicId: string;
+  cards: Flashcard[];
+}
+
+export interface InteractiveQuiz {
+  type: "quiz";
+  topic: string;
+  topicId: string;
+  questions: QuizItem[];
+}
+
+export interface InteractiveInfoCards {
+  type: "info_cards";
+  topic: string;
+  topicId: string;
+  cards: Array<{ icon?: string; title: string; body: string }>;
+}
+
+export interface InteractiveComparisonTable {
+  type: "comparison_table";
+  topic: string;
+  topicId: string;
+  headers: string[];
+  rows: string[][];
+}
+
+export interface InteractiveStudyPackActions {
+  type: "study_pack_actions";
+  topic: string;
+  topicId: string;
+  actions: Array<{ label: string; materialType: string }>;
+}
+
+export type InteractivePayload =
+  | InteractiveFlashcards
+  | InteractiveQuiz
+  | InteractiveInfoCards
+  | InteractiveComparisonTable
+  | InteractiveStudyPackActions;

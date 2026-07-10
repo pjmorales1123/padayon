@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "migrate": "node scripts/migrate.js"
+    "migrate": "node scripts/migrate.js",
+    "smoke-test": "node scripts/smoke-test.js",
+    "persona-test": "node scripts/persona-test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.1",

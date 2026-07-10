@@ -1,5 +1,13 @@
-import { callFireworks } from "./fireworks";
-import { Classification, CurriculumMatch, StudyPack, MemoryUpdate, ChatMessage } from "./types";
+import { callFireworks, ModelPreference } from "./fireworks";
+import { supabaseAdmin } from "./supabase";
+import {
+  Classification,
+  CurriculumMatch,
+  StudyPack,
+  MemoryUpdate,
+  ChatMessage,
+  InteractivePayload,
+} from "./types";
 
 function extractJson<T>(content: string): T | null {
   if (!content) return null;
@@ -38,25 +46,95 @@ function formatHistory(history: ChatMessage[]): string {
     .join("\n");
 }
 
+function keywordClassification(message: string): Classification {
+  const lower = message.toLowerCase();
+  const hasCebuano = /\b(unsa|ang|sa|ug|ako|ikaw|kini|siya|niini|sugilanon|istorya)\b/.test(lower);
+  const hasFilipino = /\b(ano|ang|sa|at|ng|mga|ako|ikaw|ito|siya|kwento|kuwento)\b/.test(lower);
+  const language = hasCebuano ? "Cebuano-English mix" : hasFilipino ? "Filipino-English mix" : "English";
+
+  const retrieval = lower.includes("flashcard") || lower.includes("quiz") || lower.includes("reviewer") || lower.includes("review") || lower.includes("show my") || lower.includes("my flashcards") || lower.includes("my quiz") || lower.includes("my notes") || lower.includes("summary");
+  const explicitCreation = lower.includes("create") || lower.includes("make") || lower.includes("build") || lower.includes("organize") || lower.includes("study pack") || lower.includes("notes");
+  const intent: Classification["intent"] = retrieval ? "retrieve_material" : explicitCreation ? "create_study_pack" : "teach_topic";
+
+  const scienceKeywords = ["photosynthesis", "chlorophyll", "cellular respiration", "ecosystem", "cell", "organism", "mitosis", "meiosis", "genetics", "atom", "molecule", "periodic"];
+  const mathKeywords = ["quadratic", "factoring", "formula", "polynomial", "equation", "algebra", "geometry", "fraction", "percent", "ratio", "function"];
+  const englishKeywords = ["irony", "characterization", "point of view", "figurative language", "metaphor", "simile", "theme", "plot", "setting"];
+  const filipinoKeywords = ["tula", "sanaysay", "pandiwa", "pang-uri", "pang-abay", "panahon", "pilipinas", "katipunan", "rebolusyon"];
+  const socialKeywords = ["history", "revolution", "government", "democracy", "philippines", "economy", "culture", "war", "colonial", "treaty"];
+  const ictKeywords = ["computer", "programming", "code", "html", "css", "javascript", "python", "database", "network", "algorithm"];
+  const mapehKeywords = ["music", "art", "dance", "physical education", "pe", "health", "rhythm", "exercise", "nutrition"];
+
+  const contains = (list: string[]) => list.some((k) => lower.includes(k));
+
+  if (contains(scienceKeywords)) {
+    let topic = "Science topic";
+    if (lower.includes("photosynthesis")) topic = "Photosynthesis";
+    else if (lower.includes("cellular respiration")) topic = "Cellular Respiration";
+    else if (lower.includes("ecosystem")) topic = "Ecosystem";
+    else if (lower.includes("cell")) topic = "Cell";
+    return { subject: "Science", subcategory: "Biology", topic, intent, language_detected: language, confidence: 0.9 };
+  }
+  if (contains(mathKeywords)) {
+    let topic = "Math topic";
+    if (lower.includes("factoring")) topic = "Factoring";
+    else if (lower.includes("quadratic formula")) topic = "Quadratic Formula";
+    else if (lower.includes("quadratic")) topic = "Quadratic Equations";
+    else if (lower.includes("geometry")) topic = "Geometry";
+    return { subject: "Math", subcategory: "Algebra", topic, intent, language_detected: language, confidence: 0.9 };
+  }
+  if (contains(englishKeywords)) {
+    let topic = "English topic";
+    if (lower.includes("irony")) topic = "Irony";
+    else if (lower.includes("characterization")) topic = "Characterization";
+    else if (lower.includes("point of view")) topic = "Point of View";
+    return { subject: "English", subcategory: "Literature", topic, intent, language_detected: language, confidence: 0.88 };
+  }
+  if (contains(filipinoKeywords)) {
+    return { subject: "Filipino", subcategory: "Language", topic: "Filipino topic", intent, language_detected: hasCebuano ? "Cebuano-English mix" : "Filipino-English mix", confidence: 0.85 };
+  }
+  if (contains(socialKeywords)) {
+    return { subject: "Social Studies", subcategory: "History", topic: "Social Studies topic", intent, language_detected: language, confidence: 0.85 };
+  }
+  if (contains(ictKeywords)) {
+    return { subject: "ICT", subcategory: "Computer Science", topic: "ICT topic", intent, language_detected: language, confidence: 0.85 };
+  }
+  if (contains(mapehKeywords)) {
+    return { subject: "MAPEH", subcategory: "Arts", topic: "MAPEH topic", intent, language_detected: language, confidence: 0.8 };
+  }
+
+  return {
+    subject: "Unknown",
+    subcategory: "Unknown",
+    topic: message.slice(0, 40) || "Unknown",
+    intent: "unknown",
+    language_detected: language,
+    confidence: 0.5,
+  };
+}
+
 export async function classifierAgent(
   message: string,
-  history: ChatMessage[] = []
+  history: ChatMessage[] = [],
+  model: ModelPreference = "auto"
 ): Promise<Classification> {
-  const prompt = `You are the Classifier Agent for PADAYON, an AI learning partner for students.
+  const prompt = `You are the Classifier Agent for PADAYON, an AI learning partner for Filipino students.
 
-Your task is to analyze the student input and return ONLY valid JSON.
-
-Detect:
-- subject
+Analyze the student input and return ONLY valid JSON with exactly these fields:
+- subject (Science, Math, English, Filipino, ICT, Social Studies, MAPEH, or Unknown)
 - subcategory
-- topic
-- intent
-- language_detected
-- confidence
+- topic (a short, specific topic title)
+- intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_story, retrieve_material, continue_learning, unknown)
+- language_detected (English, Filipino, Cebuano, Cebuano-English mix, Filipino-English mix, Other)
+- confidence (number 0.0-1.0)
 
-Subjects may include Science, Math, English, ICT, Social Studies, Filipino, MAPEH, or Unknown.
+Intent rules:
+- Use "teach_topic" when the student is asking a question, wants an explanation, or is just chatting about a topic (e.g., "What is meter?", "explain ezra pound", "let's play a game").
+- Use "create_study_pack" ONLY when the student provides notes/material to organize or explicitly asks for a full study pack (e.g., "make me a reviewer", "organize my notes", "create a study pack").
+- Use "retrieve_material" ONLY when the student explicitly asks to see existing saved materials (e.g., "show my flashcards", "where is my quiz", "my summary"). Do NOT use it for general questions like "look at" or "tell me about".
+- Use "continue_learning" when the student clearly returns to a previous topic (e.g., "continue", "go back to").
+- Use "unknown" only if you cannot determine the subject or topic at all.
 
-Possible intents (return exactly one of these): create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, retrieve_material, continue_learning, unknown
+language_detected must be one of: English, Filipino, Cebuano, Cebuano-English mix, Filipino-English mix, Other.
 
 Recent conversation:
 ${formatHistory(history)}
@@ -70,53 +148,43 @@ Do not explain. Return JSON only.`;
       { role: "system", content: "Return only valid JSON. No explanations, no markdown code fences, no text outside the JSON object." },
       { role: "user", content: prompt },
     ],
-    true
+    true,
+    1500,
+    model
   );
   const parsed = extractJson<Classification>(content);
   if (parsed) return parsed;
-    // Fallback for demo reliability
-    const lower = message.toLowerCase();
-    if (lower.includes("photosynthesis") || lower.includes("chlorophyll") || lower.includes("cellular respiration") || lower.includes("ecosystem")) {
-      return {
-        subject: "Science",
-        subcategory: "Biology",
-        topic: lower.includes("cellular respiration") ? "Cellular Respiration" : lower.includes("ecosystem") ? "Ecosystem" : "Photosynthesis",
-        intent: lower.includes("flashcard") || lower.includes("quiz") || lower.includes("reviewer") || lower.includes("show my") ? "retrieve_material" : "create_study_pack",
-        language_detected: lower.includes("unsa") || lower.includes("ang") || lower.includes("sabton") ? "Cebuano-English mix" : "English",
-        confidence: 0.95
-      };
-    }
-    if (lower.includes("quadratic") || lower.includes("factoring") || lower.includes("formula")) {
-      return {
-        subject: "Math",
-        subcategory: "Algebra",
-        topic: lower.includes("formula") ? "Quadratic Formula" : lower.includes("factoring") ? "Factoring" : "Quadratic Equations",
-        intent: lower.includes("flashcard") || lower.includes("quiz") || lower.includes("reviewer") || lower.includes("show my") ? "retrieve_material" : "create_study_pack",
-        language_detected: "English",
-        confidence: 0.92
-      };
-    }
-    if (lower.includes("irony") || lower.includes("characterization") || lower.includes("point of view")) {
-      return {
-        subject: "English",
-        subcategory: "Literature",
-        topic: lower.includes("irony") ? "Irony" : lower.includes("characterization") ? "Characterization" : "Point of View",
-        intent: lower.includes("flashcard") || lower.includes("quiz") || lower.includes("reviewer") || lower.includes("show my") ? "retrieve_material" : "create_study_pack",
-        language_detected: "English",
-        confidence: 0.9
-      };
-    }
-    return {
-      subject: "Unknown",
-      subcategory: "Unknown",
-      topic: "Unknown",
-      intent: "unknown",
-      language_detected: "English",
-      confidence: 0.5
-    };
+  return keywordClassification(message);
 }
 
-export async function curriculumAgent(classification: Classification): Promise<CurriculumMatch> {
+export async function curriculumAgent(
+  classification: Classification,
+  model: ModelPreference = "auto"
+): Promise<CurriculumMatch> {
+  // Fast DB lookup first; fall back to LLM only if no seeded curriculum item matches.
+  try {
+    const { data: rows } = await supabaseAdmin!
+      .from("curriculum_items")
+      .select("*")
+      .ilike("topic", classification.topic)
+      .limit(1);
+
+    if (rows && rows.length > 0) {
+      const row = rows[0];
+      return {
+        grade_level: row.grade_level || "Grade 9",
+        subject: row.subject || classification.subject,
+        subcategory: row.subcategory || classification.subcategory,
+        topic: row.topic || classification.topic,
+        competency: row.competency || `Learn about ${classification.topic}`,
+        previous_topic: row.previous_topic || null,
+        next_topic: row.next_topic || null,
+      };
+    }
+  } catch (err) {
+    console.error("Curriculum DB lookup error:", err);
+  }
+
   const prompt = `You are the Curriculum Alignment Agent for PADAYON.
 
 Match the detected topic to a Grade 9 curriculum item. Return ONLY valid JSON with:
@@ -137,49 +205,46 @@ Detected: ${JSON.stringify(classification)}`;
       { role: "system", content: "Return only valid JSON. No explanations, no markdown code fences, no text outside the JSON object." },
       { role: "user", content: prompt },
     ],
-    true
+    true,
+    1500,
+    model
   );
   const parsed = extractJson<CurriculumMatch>(content);
   if (parsed) return parsed;
-    // Fallback seeded curriculum
-    const map: Record<string, CurriculumMatch> = {
-      "Photosynthesis": { grade_level: "Grade 9", subject: "Science", subcategory: "Biology", topic: "Photosynthesis", competency: "Explain how plants make food through photosynthesis.", previous_topic: "Plant structures", next_topic: "Cellular respiration" },
-      "Cellular Respiration": { grade_level: "Grade 9", subject: "Science", subcategory: "Biology", topic: "Cellular Respiration", competency: "Explain how cells release energy from food.", previous_topic: "Photosynthesis", next_topic: "Ecosystem" },
-      "Ecosystem": { grade_level: "Grade 9", subject: "Science", subcategory: "Biology", topic: "Ecosystem", competency: "Explain interactions among living things and their environment.", previous_topic: "Cellular Respiration", next_topic: null },
-      "Factoring": { grade_level: "Grade 9", subject: "Math", subcategory: "Algebra", topic: "Factoring", competency: "Factor polynomials using appropriate methods.", previous_topic: null, next_topic: "Quadratic Equations" },
-      "Quadratic Equations": { grade_level: "Grade 9", subject: "Math", subcategory: "Algebra", topic: "Quadratic Equations", competency: "Solve quadratic equations using different methods.", previous_topic: "Factoring", next_topic: "Quadratic Formula" },
-      "Quadratic Formula": { grade_level: "Grade 9", subject: "Math", subcategory: "Algebra", topic: "Quadratic Formula", competency: "Solve quadratic equations using the quadratic formula.", previous_topic: "Quadratic Equations", next_topic: null },
-      "Point of View": { grade_level: "Grade 9", subject: "English", subcategory: "Literature", topic: "Point of View", competency: "Identify and analyze point of view in literary texts.", previous_topic: null, next_topic: "Characterization" },
-      "Characterization": { grade_level: "Grade 9", subject: "English", subcategory: "Literature", topic: "Characterization", competency: "Analyze how characters are developed in a text.", previous_topic: "Point of View", next_topic: "Irony" },
-      "Irony": { grade_level: "Grade 9", subject: "English", subcategory: "Literature", topic: "Irony", competency: "Identify and explain irony in literary texts.", previous_topic: "Characterization", next_topic: null }
-    };
-    return map[classification.topic] || {
-      grade_level: "Grade 9",
-      subject: classification.subject,
-      subcategory: classification.subcategory,
-      topic: classification.topic,
-      competency: `Learn about ${classification.topic}`,
-      previous_topic: null,
-      next_topic: null
-    };
+
+  return {
+    grade_level: "Grade 9",
+    subject: classification.subject,
+    subcategory: classification.subcategory,
+    topic: classification.topic,
+    competency: `Learn about ${classification.topic}`,
+    previous_topic: null,
+    next_topic: null,
+  };
 }
 
 export async function materialCreatorAgent(
   notes: string,
   topic: string,
   curriculum: CurriculumMatch,
-  profile: Record<string, unknown>
+  profile: Record<string, unknown>,
+  model: ModelPreference = "auto"
 ): Promise<StudyPack> {
-  const prompt = `You are the Material Creator Agent for PADAYON.
+  const prompt = `You are the Material Creator Agent for PADAYON, an AI learning partner for Grade 9 Filipino students.
 
-Create a study pack based on the student notes, topic, curriculum match, and learner profile.
+Create a complete study pack based on the student notes, topic, curriculum match, and learner profile.
 
-Return ONLY valid JSON with:
-- clean_notes (string)
-- reviewer (string)
-- flashcards (array of {front, back})
-- quiz (array of {question, choices, answer, explanation})
-- summary (string)
+Return ONLY valid JSON with exactly these fields:
+- clean_notes (string, 2-3 short paragraphs, clear and student-friendly)
+- reviewer (string, bullet-point study guide)
+- flashcards (array of 4-6 {front, back})
+- quiz (array of 3-5 {question, choices: 4 options, answer, explanation})
+- summary (string, 1-2 sentences)
+- story (string, 1 short paragraph that explains the concept through a memorable character or real-life scenario)
+
+Use simple English or include Filipino/Cebuano terms only when the learner profile shows high confidence in that language.
+Always include the English academic term (e.g., **photosynthesis**) at least once so the student learns the correct vocabulary.
+Make the story relatable to a Filipino teenager.
 
 Student notes: "${notes}"
 Topic: ${topic}
@@ -192,76 +257,99 @@ Learner profile: ${JSON.stringify(profile)}`;
       { role: "user", content: prompt },
     ],
     true,
-    2500
+    2500,
+    model
   );
   const parsed = extractJson<StudyPack>(content);
-  if (parsed) return parsed;
-    // Fallback seeded materials for Photosynthesis demo
-    if (topic === "Photosynthesis") {
-      return {
-        clean_notes: "Photosynthesis is the process by which plants use sunlight, water, and carbon dioxide to make glucose (food) and release oxygen. Chlorophyll in the leaves captures sunlight energy.",
-        reviewer: "1. Photosynthesis uses sunlight, CO2, and water.\n2. Chlorophyll captures light energy.\n3. Products are glucose and oxygen.\n4. It happens in the leaves.",
-        flashcards: [
-          { front: "What is photosynthesis?", back: "The process where plants make food using sunlight, water, and carbon dioxide." },
-          { front: "What does chlorophyll do?", back: "It captures sunlight energy for the plant." },
-          { front: "What gas do plants take in during photosynthesis?", back: "Carbon dioxide." },
-          { front: "What are the products of photosynthesis?", back: "Glucose and oxygen." }
-        ],
-        quiz: [
-          {
-            question: "What gas do plants take in during photosynthesis?",
-            choices: ["Oxygen", "Carbon dioxide", "Nitrogen", "Hydrogen"],
-            answer: "Carbon dioxide",
-            explanation: "Plants use carbon dioxide, water, and sunlight to make glucose."
-          },
-          {
-            question: "What does chlorophyll capture?",
-            choices: ["Water", "Soil", "Sunlight energy", "Oxygen"],
-            answer: "Sunlight energy",
-            explanation: "Chlorophyll is the green pigment that captures sunlight for photosynthesis."
-          }
-        ],
-        summary: "Photosynthesis is how plants make food using sunlight, water, and CO2, producing glucose and oxygen."
-      };
+  if (parsed) {
+    if (!parsed.story || parsed.story.trim().length < 20) {
+      parsed.story = `Imagine a Grade 9 student in the Philippines sitting under a mango tree. A friend asks, "What is ${topic}?" The student explains it using a simple, everyday example, and suddenly the idea clicks. That's the power of a good story.`;
     }
+    return parsed;
+  }
+  // Fallback seeded materials for Photosynthesis demo
+  if (topic === "Photosynthesis") {
     return {
-      clean_notes: `Clean notes about ${topic}.`,
-      reviewer: `Reviewer for ${topic}.`,
-      flashcards: [{ front: `What is ${topic}?`, back: `${topic} is an important concept.` }],
-      quiz: [{ question: `What is ${topic}?`, choices: ["A", "B", "C", "D"], answer: "A", explanation: "Because it is correct." }],
-      summary: `Summary of ${topic}.`
+      clean_notes: "Photosynthesis is the process by which plants use sunlight, water, and carbon dioxide to make glucose (food) and release oxygen. Chlorophyll in the leaves captures sunlight energy.",
+      reviewer: "1. Photosynthesis uses sunlight, CO2, and water.\n2. Chlorophyll captures light energy.\n3. Products are glucose and oxygen.\n4. It happens in the leaves.",
+      flashcards: [
+        { front: "What is photosynthesis?", back: "The process where plants make food using sunlight, water, and carbon dioxide." },
+        { front: "What does chlorophyll do?", back: "It captures sunlight energy for the plant." },
+        { front: "What gas do plants take in during photosynthesis?", back: "Carbon dioxide." },
+        { front: "What are the products of photosynthesis?", back: "Glucose and oxygen." }
+      ],
+      quiz: [
+        {
+          question: "What gas do plants take in during photosynthesis?",
+          choices: ["Oxygen", "Carbon dioxide", "Nitrogen", "Hydrogen"],
+          answer: "Carbon dioxide",
+          explanation: "Plants use carbon dioxide, water, and sunlight to make glucose."
+        },
+        {
+          question: "What does chlorophyll capture?",
+          choices: ["Water", "Soil", "Sunlight energy", "Oxygen"],
+          answer: "Sunlight energy",
+          explanation: "Chlorophyll is the green pigment that captures sunlight for photosynthesis."
+        }
+      ],
+      summary: "Photosynthesis is how plants make food using sunlight, water, and CO2, producing glucose and oxygen.",
+      story: "Mang Tomas has a sari-sari store beside a big acacia tree. Every afternoon, the tree's wide leaves drink in sunlight and breathe in carbon dioxide from the air. Using water from the soil, the leaves cook up sugar to help the tree grow and release fresh oxygen for Mang Tomas and his customers. That invisible kitchen inside the leaf is photosynthesis."
     };
+  }
+  return {
+    clean_notes: `Clean notes about ${topic}.`,
+    reviewer: `Reviewer for ${topic}.`,
+    flashcards: [{ front: `What is ${topic}?`, back: `${topic} is an important concept.` }],
+    quiz: [{ question: `What is ${topic}?`, choices: ["A", "B", "C", "D"], answer: "A", explanation: "Because it is correct." }],
+    summary: `Summary of ${topic}.`,
+    story: `Imagine a student in the Philippines trying to understand ${topic}. With curiosity and practice, the idea becomes clear and useful.`
+  };
 }
-
 export async function teachingAgent(
   message: string,
   topic: string,
   curriculum: CurriculumMatch,
   profile: Record<string, unknown>,
-  history: ChatMessage[] = []
+  history: ChatMessage[] = [],
+  studyPack?: StudyPack,
+  quizResult?: { correct: boolean; topic: string; question?: string } | null,
+  classification?: Classification,
+  model: ModelPreference = "auto"
 ): Promise<string> {
-  const prompt = `You are the Teaching Agent for PADAYON.
+  const materialHint = studyPack
+    ? `\n\nStudy materials were organized for this topic. Only mention them if the student asked for them. Do not say "your flashcards are ready" or push the quiz unless the student explicitly asked for flashcards or a quiz. You may briefly say the topic is saved in their study pack if relevant.`
+    : "";
 
-Your goal is to help the student understand, not just give answers.
+  const quizHint = quizResult
+    ? `\n\nThe student just answered a quiz question ${quizResult.correct ? "correctly" : "incorrectly"}. If incorrect, do not give the answer directly. Give a hint, address the misconception, and ask a guiding question.`
+    : "";
 
-Use translanguaging:
-- Use the learner's confident language first if needed.
-- Then introduce academic English terms naturally.
-- Do not force English first.
-- Use short, student-friendly explanations.
+  const prompt = `You are the Teaching Agent for PADAYON, an AI learning partner for Grade 9 students in the Philippines.
+
+Your goal is to help the student understand, not just give answers. Adapt your response to the learner profile below — it works for any student.
+
+How to adapt:
+- Language: Respond in the language the student just used (detected: ${classification?.language_detected || "English"}). If the student wrote in English, reply in English even if their profile lists another language as strong. Only use Filipino/Cebuano when the student's actual message is in Filipino/Cebuano.
+- Learning style: Check learning_style. Use the preferred methods (e.g., analogies, visuals, stories, short steps, real-life examples).
+- Strengths: Build on the student's strengths.
+- Weaknesses: Be gentle and scaffold. If a weakness is mentioned, give extra support in that area.
+- Motivation: If the student sounds frustrated, unmotivated, or discouraged, be warm and encouraging. Break the idea into tiny, doable steps and celebrate effort.
+- Challenge: If the student seems advanced or confident, go a little deeper, make connections, and ask a harder guiding question.
+- Wrong answers: If a quiz result shows the answer was wrong, do NOT state the correct answer and do NOT give a mnemonic or trick that reveals it. Give only a hint, ask the student to rethink, and target the misconception with a guiding question.
+- Keep it short and student-friendly. Use examples familiar to Filipino students when possible.
+- Academic term: If you respond partly in Filipino or Cebuano, you MUST include the English academic term **${topic}** at least once so the student learns the correct vocabulary.
 - Ask one guiding question at the end.
-- If the student is asking about a previous topic or saved material, use the conversation history to stay consistent.
 
 Learner profile: ${JSON.stringify(profile)}
 Topic: ${topic}
-Curriculum: ${JSON.stringify(curriculum)}
+Curriculum: ${JSON.stringify(curriculum)}${materialHint}${quizHint}
 
 Recent conversation:
 ${formatHistory(history)}
 
 Student message: "${message}"`;
 
-  const content = await callFireworks([{ role: "user", content: prompt }]);
+  const content = await callFireworks([{ role: "user", content: prompt }], false, 2500, model);
   if (content && content.trim().length > 10) return content;
 
   // Fallback for demo
@@ -288,7 +376,8 @@ Can you tell me what you already know about it?`;
 export async function memoryAgent(
   message: string,
   quizResult: { correct: boolean; topic: string; question?: string } | null,
-  profile: Record<string, unknown>
+  profile: Record<string, unknown>,
+  model: ModelPreference = "auto"
 ): Promise<MemoryUpdate> {
   const prompt = `You are the Memory Agent for PADAYON.
 
@@ -314,7 +403,9 @@ Current profile: ${JSON.stringify(profile)}`;
       { role: "system", content: "Return only valid JSON. No explanations, no markdown code fences, no text outside the JSON object." },
       { role: "user", content: prompt },
     ],
-    true
+    true,
+    1500,
+    model
   );
   const parsed = extractJson<MemoryUpdate>(content);
   if (parsed) {
@@ -334,4 +425,90 @@ Current profile: ${JSON.stringify(profile)}`;
     strength_update: "Understands better with real-life examples",
     next_recommended_action: "Review flashcards for Photosynthesis"
   };
+}
+
+export function visualDesignerAgent(
+  message: string,
+  topicId: string,
+  topicTitle: string,
+  studyPack: StudyPack | null | undefined,
+  classification: Classification
+): InteractivePayload | null {
+  if (!studyPack) return null;
+
+  const lower = message.toLowerCase();
+  const wantsFlashcards = classification.intent === "make_flashcards" || /flashcard|flash card|card/i.test(lower);
+  const wantsQuiz = classification.intent === "make_quiz" || /quiz|test|question/i.test(lower);
+  const wantsTable = /table|compare|comparison|difference|versus|vs\.?/i.test(lower);
+  const wantsVisual = /visual|diagram|picture|image|infographic|chart|graphic/i.test(lower);
+
+  if (wantsFlashcards && studyPack.flashcards && studyPack.flashcards.length > 0) {
+    return {
+      type: "flashcards",
+      topic: topicTitle,
+      topicId,
+      cards: studyPack.flashcards,
+    };
+  }
+
+  if (wantsQuiz && studyPack.quiz && studyPack.quiz.length > 0) {
+    return {
+      type: "quiz",
+      topic: topicTitle,
+      topicId,
+      questions: studyPack.quiz,
+    };
+  }
+
+  if (wantsTable) {
+    // Try to derive a comparison table from clean notes or quiz
+    const headers = ["Feature", "Details"];
+    const rows: string[][] = [];
+    const sentences = (studyPack.clean_notes || studyPack.summary || "")
+      .split(/\.|\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 10);
+    sentences.slice(0, 6).forEach((s) => {
+      const parts = s.split(/:\s*/);
+      if (parts.length >= 2) {
+        rows.push([parts[0].trim(), parts.slice(1).join(": ").trim()]);
+      } else if (s.toLowerCase().includes(" ")) {
+        const words = s.split(" ");
+        const mid = Math.ceil(words.length / 2);
+        rows.push([words.slice(0, mid).join(" "), words.slice(mid).join(" ")]);
+      }
+    });
+    if (rows.length > 0) {
+      return {
+        type: "comparison_table",
+        topic: topicTitle,
+        topicId,
+        headers,
+        rows,
+      };
+    }
+  }
+
+  if (wantsVisual) {
+    const cards: Array<{ icon: string; title: string; body: string }> = [];
+    if (studyPack.flashcards) {
+      studyPack.flashcards.slice(0, 4).forEach((c) => {
+        cards.push({ icon: "💡", title: c.front, body: c.back });
+      });
+    }
+    if (cards.length === 0 && studyPack.summary) {
+      cards.push({ icon: "📝", title: "Summary", body: studyPack.summary });
+    }
+    if (cards.length > 0) {
+      return {
+        type: "info_cards",
+        topic: topicTitle,
+        topicId,
+        cards,
+      };
+    }
+  }
+
+  // Do not show widgets by default for create_study_pack unless the student explicitly asked for one.
+  return null;
 }

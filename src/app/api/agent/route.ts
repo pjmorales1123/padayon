@@ -6,14 +6,17 @@ import {
   materialCreatorAgent,
   teachingAgent,
   memoryAgent,
+  visualDesignerAgent,
 } from "@/lib/agents";
-import { ChatMessage } from "@/lib/types";
+import { ChatMessage, MemoryUpdate, InteractivePayload } from "@/lib/types";
+import { startRun, logStep } from "@/lib/agent-events";
 
 interface MaterialContent {
   text?: string;
   reviewer?: string;
   flashcards?: Array<{ front: string; back: string }>;
-  quiz?: Array<{ question: string; choices: string[]; answer: string }>;
+  quiz?: Array<{ question: string; choices: string[]; answer: string; explanation?: string }>;
+  image_url?: string;
 }
 
 const RETRIEVAL_INTENTS = [
@@ -21,13 +24,75 @@ const RETRIEVAL_INTENTS = [
   "make_flashcards",
   "make_reviewer",
   "make_quiz",
+  "make_story",
   "continue_learning",
 ];
 
-function mapIntentToType(intent: string): string | null {
+function mapIntentToType(intent: string, message: string): string | null {
   if (intent === "make_flashcards") return "flashcards";
   if (intent === "make_quiz") return "quiz";
   if (intent === "make_reviewer") return "reviewer";
+  if (intent === "make_story") return "story";
+  if (intent === "retrieve_material") {
+    const lower = message.toLowerCase();
+    if (lower.includes("flashcard")) return "flashcards";
+    if (lower.includes("quiz")) return "quiz";
+    if (lower.includes("reviewer") || lower.includes("review")) return "reviewer";
+    if (lower.includes("story") || lower.includes("kwento") || lower.includes("sugilanon")) return "story";
+    if (lower.includes("clean notes")) return "clean_notes";
+    if (lower.includes("summary")) return "summary";
+    return null; // generic "look" should not default to flashcards
+  }
+  return null;
+}
+
+function buildRetrievalInteractive(
+  requestedType: string | null,
+  topicId: string,
+  topicTitle: string,
+  materials: Array<{ type: string; content: MaterialContent }>
+): InteractivePayload | null {
+  const type = requestedType;
+  if (!type) return null;
+
+  if (type === "flashcards") {
+    const found = materials.find((m) => m.type === "flashcards");
+    const cards = found?.content?.flashcards;
+    if (cards && cards.length > 0) {
+      return { type: "flashcards", topic: topicTitle, topicId, cards };
+    }
+  }
+
+  if (type === "quiz") {
+    const found = materials.find((m) => m.type === "quiz");
+    const questions = found?.content?.quiz;
+    if (questions && questions.length > 0) {
+      const normalized = questions.map((q) => ({
+        question: q.question,
+        choices: q.choices,
+        answer: q.answer,
+        explanation: q.explanation || "",
+      }));
+      return { type: "quiz", topic: topicTitle, topicId, questions: normalized };
+    }
+  }
+
+  if (type === "reviewer") {
+    const found = materials.find((m) => m.type === "reviewer");
+    const text = found?.content?.text;
+    if (text) {
+      const cards = text
+        .split("\n")
+        .map((line) => line.replace(/^[-*\d.\s]+/, "").trim())
+        .filter((line) => line.length > 10)
+        .slice(0, 4)
+        .map((line) => ({ icon: "📝", title: "Key point", body: line }));
+      if (cards.length > 0) {
+        return { type: "info_cards", topic: topicTitle, topicId, cards };
+      }
+    }
+  }
+
   return null;
 }
 
@@ -53,18 +118,116 @@ function formatRetrievedMaterial(type: string, content: MaterialContent): string
   if (type === "reviewer") {
     return "\n\n" + (content?.reviewer || "");
   }
+  if (type === "summary") {
+    return "\n\n" + (content?.text || "");
+  }
+  if (type === "story") {
+    return "\n\n" + (content?.text || "");
+  }
   return "";
+}
+
+interface ProfileRow extends Record<string, unknown> {
+  id?: string;
+  language_confidence?: Record<string, string>;
+  learning_style?: Record<string, unknown>;
+  strengths?: string[];
+  weaknesses?: string[];
+}
+
+async function applyMemoryUpdate(
+  requestId: string,
+  userId: string,
+  message: string,
+  quizResult: { correct: boolean; topic: string; question?: string } | undefined,
+  classification: { topic: string; language_detected: string },
+  existingProfile: ProfileRow | null,
+  model: import("@/lib/fireworks").ModelPreference = "auto"
+) {
+  try {
+    logStep(requestId, "memory", "Updating learner profile from this interaction", "running");
+    const memoryQuizResult = quizResult
+      ? { ...quizResult, topic: classification.topic }
+      : null;
+
+    const memoryUpdate: MemoryUpdate = await memoryAgent(
+      message,
+      memoryQuizResult,
+      existingProfile || {},
+      model
+    );
+
+    const lsUpdate = memoryUpdate.learning_style_update || "";
+    const lsEntries = lsUpdate
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && !/no change|none|n\/a/i.test(s))
+      .map((s) => [s, true]);
+
+    const newStrength = (memoryUpdate.strength_update || "").trim();
+    const newWeakness = (memoryUpdate.weakness_update || "").trim();
+
+    const profileUpdate = {
+      language_confidence: {
+        ...(existingProfile?.language_confidence || {}),
+        [classification.language_detected]: "High",
+      },
+      learning_style: {
+        ...(existingProfile?.learning_style || {}),
+        ...Object.fromEntries(lsEntries),
+      },
+      strengths: [
+        ...new Set([
+          ...(existingProfile?.strengths || []),
+          ...(newStrength && !/no change|none|n\/a/i.test(newStrength) ? [newStrength] : []),
+        ]),
+      ],
+      weaknesses: [
+        ...new Set([
+          ...(existingProfile?.weaknesses || []),
+          ...(newWeakness && !/no change|none|n\/a/i.test(newWeakness) ? [newWeakness] : []),
+        ]),
+      ],
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingProfile) {
+      await supabaseAdmin!
+        .from("learner_profiles")
+        .update(profileUpdate)
+        .eq("id", existingProfile.id);
+    } else {
+      await supabaseAdmin!.from("learner_profiles").insert({
+        user_id: userId,
+        language_confidence: profileUpdate.language_confidence,
+        learning_style: profileUpdate.learning_style,
+        strengths: profileUpdate.strengths,
+        weaknesses: profileUpdate.weaknesses,
+      });
+    }
+    logStep(requestId, "memory", "Learner profile updated", "done", { updatedFields: Object.keys(profileUpdate) });
+  } catch (err) {
+    logStep(requestId, "memory", "Learner profile update failed", "error", { error: String(err) });
+    console.error("Memory update error:", err);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, message, quizResult } = await req.json();
+    const body = await req.json();
+    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, model } = body;
+    const preferredModel = model === "gemma-3" || model === "gemma-4" ? model : "auto";
 
     if (!userId || !message) {
       return NextResponse.json({ error: "Missing userId or message" }, { status: 400 });
     }
 
+    const requestId = clientRequestId || `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    startRun(requestId, userId, message);
+    logStep(requestId, "start", "Received student message", "done", { messageLength: message.length });
+
     // 1. Load recent conversation history for this user (across all topics)
+    logStep(requestId, "profile", "Loading conversation history", "running");
     const { data: historyRows, error: historyErr } = await supabaseAdmin!
       .from("messages")
       .select("role, content")
@@ -79,19 +242,48 @@ export async function POST(req: NextRequest) {
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
+    logStep(requestId, "profile", "Loaded conversation history", "done", { historyMessages: history.length });
+
     // 2. Classifier Agent with history context
-    const classification = await classifierAgent(message, history);
+    logStep(requestId, "classify", "Classifier Agent: detecting subject, topic & intent", "running");
+    let classification = await classifierAgent(message, history, preferredModel);
+
+    // If this message is a quiz follow-up, keep the quiz topic so feedback stays in context.
+    if (quizResult?.topic) {
+      const { data: quizTopic } = await supabaseAdmin!
+        .from("topics")
+        .select("id, title, subject_id, subcategory")
+        .eq("title", quizResult.topic)
+        .maybeSingle();
+      const { data: quizSubject } = quizTopic
+        ? await supabaseAdmin!.from("subjects").select("name").eq("id", quizTopic.subject_id).maybeSingle()
+        : { data: null };
+      classification = {
+        ...classification,
+        topic: quizTopic?.title || quizResult.topic,
+        subcategory: quizTopic?.subcategory || classification.subcategory,
+        subject: quizSubject?.name || classification.subject,
+        intent: "teach_topic",
+      };
+      logStep(requestId, "classify", `Quiz context kept: ${classification.subject} → ${classification.subcategory} → ${classification.topic}`, "done", { classification });
+    } else {
+      logStep(requestId, "classify", `Detected: ${classification.subject} → ${classification.subcategory} → ${classification.topic}`, "done", { classification });
+    }
 
     // 3. Curriculum Alignment Agent
-    const curriculum = await curriculumAgent(classification);
+    logStep(requestId, "curriculum", "Curriculum Agent: aligning to Grade 9 competencies", "running");
+    const curriculum = await curriculumAgent(classification, preferredModel);
+    logStep(requestId, "curriculum", `Aligned to ${curriculum.grade_level} competency`, "done", { curriculum });
 
-    // 4. Find or create subject
-    let { data: subject } = await supabaseAdmin!
+    // 4. Find or create subject (case-insensitive to avoid duplicates)
+    logStep(requestId, "subject", `Finding or creating subject: ${classification.subject}`, "running");
+    const { data: subjects } = await supabaseAdmin!
       .from("subjects")
       .select("*")
       .eq("user_id", userId)
-      .eq("name", classification.subject)
-      .single();
+      .ilike("name", classification.subject)
+      .limit(1);
+    let subject = subjects?.[0];
 
     if (!subject) {
       const { data: newSubject, error: subjErr } = await supabaseAdmin!
@@ -102,14 +294,17 @@ export async function POST(req: NextRequest) {
       if (subjErr) throw subjErr;
       subject = newSubject;
     }
+    logStep(requestId, "subject", `Subject ready: ${subject.name}`, "done", { subjectId: subject.id });
 
-    // 5. Find or create topic
-    let { data: topic } = await supabaseAdmin!
+    // 5. Find or create topic (case-insensitive to avoid duplicates)
+    logStep(requestId, "topic", `Finding or creating topic: ${classification.topic}`, "running");
+    const { data: topics } = await supabaseAdmin!
       .from("topics")
       .select("*")
       .eq("subject_id", subject.id)
-      .eq("title", classification.topic)
-      .single();
+      .ilike("title", classification.topic)
+      .limit(1);
+    let topic = topics?.[0];
 
     if (!topic) {
       const { data: newTopic, error: topicErr } = await supabaseAdmin!
@@ -131,6 +326,7 @@ export async function POST(req: NextRequest) {
         .update({ last_studied_at: new Date().toISOString() })
         .eq("id", topic.id);
     }
+    logStep(requestId, "topic", `Topic ready: ${topic.title}`, "done", { topicId: topic.id });
 
     // 6. Save original notes
     await supabaseAdmin!.from("messages").insert({
@@ -141,45 +337,80 @@ export async function POST(req: NextRequest) {
     });
 
     // 7. Retrieve existing materials if retrieval intent
-    let isRetrieval = RETRIEVAL_INTENTS.includes(classification.intent);
-    let materials_created: string[] = [];
     let reply = "";
+    let materials_created: string[] = [];
+    let savedMaterials: Array<{ type: string; id: string }> = [];
+    let studyPack = null;
+    let interactive: InteractivePayload | null = null;
+
+    const isRetrieval = RETRIEVAL_INTENTS.includes(classification.intent);
 
     if (isRetrieval) {
+      logStep(requestId, "retrieve", `Retrieving saved materials for ${classification.topic}`, "running");
       const { data: materials } = await supabaseAdmin!
         .from("materials")
         .select("*")
         .eq("topic_id", topic.id);
 
-      const requestedType = mapIntentToType(classification.intent);
+      const requestedType = mapIntentToType(classification.intent, message);
 
-      if (requestedType && materials) {
-        const found = materials.find((m) => m.type === requestedType);
+      if (requestedType) {
+        const found = materials?.find((m) => m.type === requestedType);
         if (found) {
           reply = `Here are your saved ${classification.topic} ${requestedType} from ${classification.subject} → ${classification.subcategory}.`;
           reply += formatRetrievedMaterial(requestedType, found.content);
+          interactive = buildRetrievalInteractive(requestedType, topic.id, topic.title, materials || []);
+          logStep(requestId, "retrieve", `Returned saved ${requestedType}`, "done", { type: requestedType });
         } else {
           reply = `I don't have ${requestedType} for ${classification.topic} yet. Let me create them!`;
-          isRetrieval = false; // fall through to creation
+          logStep(requestId, "retrieve", `${requestedType} not found — will create`, "done", { type: requestedType });
         }
+      } else if (classification.intent === "continue_learning" && materials) {
+        const summary = materials.find((m) => m.type === "summary");
+        const flashcards = materials.find((m) => m.type === "flashcards");
+        const quiz = materials.find((m) => m.type === "quiz");
+        const story = materials.find((m) => m.type === "story");
+        if (summary || flashcards || quiz || story) {
+          reply = `Welcome back to ${classification.topic}! Let's keep learning.`;
+          if (summary?.content?.text) {
+            reply += `\n\nQuick summary:\n${summary.content.text}`;
+          }
+          if (story?.content?.text) {
+            reply += `\n\nStory:\n${story.content.text}`;
+          }
+          reply += `\n\nYou can:`;
+          if (flashcards) reply += `\n- Review your flashcards`;
+          if (quiz) reply += `\n- Take the quiz`;
+          if (story) reply += `\n- Read the story again`;
+          reply += `\n\nOpen your study pack here: /topic/${topic.id}`;
+        } else {
+          reply = `Let's start learning about ${classification.topic}!`;
+        }
+        logStep(requestId, "retrieve", "Compiled continue-learning overview", "done");
       }
     }
 
-    // 8. Generate materials if needed
-    let studyPack = null;
-    let savedMaterials: Array<{ type: string; id: string }> = [];
+    const shouldCreateMaterials =
+      classification.intent === "create_study_pack" || reply.includes("Let me create them");
+    const shouldTeach = !reply && !shouldCreateMaterials;
 
-    if (!isRetrieval || reply.includes("Let me create them")) {
-      const { data: profileRow } = await supabaseAdmin!
+    let profileRow: Record<string, unknown> | null = null;
+
+    if (shouldCreateMaterials || shouldTeach) {
+      logStep(requestId, "profile", "Loading full learner profile", "running");
+      const { data: p } = await supabaseAdmin!
         .from("learner_profiles")
         .select("*")
         .eq("user_id", userId)
         .single();
+      profileRow = (p as ProfileRow | null) || null;
+      logStep(requestId, "profile", "Learner profile loaded", "done", { hasProfile: !!profileRow });
+    }
 
-      const profile = profileRow || {};
-      studyPack = await materialCreatorAgent(message, classification.topic, curriculum, profile);
+    if (shouldCreateMaterials) {
+      logStep(requestId, "create_materials", "Material Creator Agent: building study pack", "running");
+      studyPack = await materialCreatorAgent(message, classification.topic, curriculum, profileRow || {}, preferredModel);
 
-      // Prepare material inserts
       const materialInserts = [
         { topic_id: topic.id, type: "original_notes", title: "Original Notes", content: { text: message } },
         { topic_id: topic.id, type: "clean_notes", title: "Clean Notes", content: { text: studyPack.clean_notes } },
@@ -187,9 +418,10 @@ export async function POST(req: NextRequest) {
         { topic_id: topic.id, type: "flashcards", title: "Flashcards", content: { flashcards: studyPack.flashcards } },
         { topic_id: topic.id, type: "quiz", title: "Quiz", content: { quiz: studyPack.quiz } },
         { topic_id: topic.id, type: "summary", title: "Summary", content: { text: studyPack.summary } },
+        ...(studyPack.story ? [{ topic_id: topic.id, type: "story", title: "Story", content: { text: studyPack.story } }] : []),
+        ...(imageUrl ? [{ topic_id: topic.id, type: "image_notes", title: "Uploaded Image", content: { image_url: imageUrl } }] : []),
       ];
 
-      // Batch load existing materials for this topic to avoid N+1 selects
       const { data: existingMaterials } = await supabaseAdmin!
         .from("materials")
         .select("id, type")
@@ -219,95 +451,69 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      savedMaterials = ["clean_notes", "reviewer", "flashcards", "quiz"].map((type) => ({
+      savedMaterials = ["clean_notes", "reviewer", "flashcards", "quiz", "summary", ...(studyPack.story ? ["story"] : [])].map((type) => ({
         type,
         id: existingByType.get(type) || "",
       }));
       materials_created = savedMaterials.map((m) => m.type);
+      logStep(requestId, "create_materials", `Study pack saved (${materials_created.length} material types)`, "done", { materials_created });
 
-      // Generate teaching response with full history context
-      reply = await teachingAgent(message, classification.topic, curriculum, profile, history);
+      const teachingQuizResult = quizResult
+        ? { ...quizResult, topic: classification.topic }
+        : null;
+
+      logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack, teachingQuizResult, classification, preferredModel);
+      logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length });
       if (!reply || reply.length < 10) {
-        reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz`;
+        reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz\n✓ Summary${studyPack.story ? "\n✓ Story" : ""}`;
       }
     }
 
-    // 9. Save AI reply
+    if (!interactive && shouldCreateMaterials && topic) {
+      interactive = visualDesignerAgent(message, topic.id, topic.title, studyPack, classification);
+    }
+
+    if (shouldTeach) {
+      const teachingQuizResult = quizResult
+        ? { ...quizResult, topic: classification.topic }
+        : null;
+
+      logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, undefined, teachingQuizResult, classification, preferredModel);
+      logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length });
+      if (!reply || reply.length < 10) {
+        reply = `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;
+      }
+    }
+
+    // 8. Save AI reply
+    logStep(requestId, "save_reply", "Saving reply to conversation history", "running");
     await supabaseAdmin!.from("messages").insert({
       user_id: userId,
       topic_id: topic.id,
       role: "assistant",
       content: reply,
     });
+    logStep(requestId, "save_reply", "Reply saved", "done");
 
-    // 10. Memory Agent with actual quiz result when available
-    const memoryQuizResult = quizResult
-      ? { ...quizResult, topic: classification.topic }
-      : null;
-
-    const { data: existingProfile } = await supabaseAdmin!
-      .from("learner_profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-
-    const memoryUpdate = await memoryAgent(message, memoryQuizResult, existingProfile || {});
-
-    // Update learner profile
-    const lsUpdate = memoryUpdate.learning_style_update || "";
-    const lsEntries = lsUpdate
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-      .map((s) => [s, true]);
-
-    const profileUpdate = {
-      language_confidence: {
-        ...(existingProfile?.language_confidence || {}),
-        [classification.language_detected]: "High",
-      },
-      learning_style: {
-        ...(existingProfile?.learning_style || {}),
-        ...Object.fromEntries(lsEntries),
-      },
-      strengths: [
-        ...new Set([
-          ...(existingProfile?.strengths || []),
-          memoryUpdate.strength_update,
-        ]),
-      ],
-      weaknesses: [
-        ...new Set([
-          ...(existingProfile?.weaknesses || []),
-          memoryUpdate.weakness_update,
-        ]),
-      ],
-      updated_at: new Date().toISOString(),
-    };
-
-    if (existingProfile) {
-      await supabaseAdmin!
-        .from("learner_profiles")
-        .update(profileUpdate)
-        .eq("id", existingProfile.id);
-    } else {
-      await supabaseAdmin!.from("learner_profiles").insert({
-        user_id: userId,
-        language_confidence: profileUpdate.language_confidence,
-        learning_style: profileUpdate.learning_style,
-        strengths: profileUpdate.strengths,
-        weaknesses: profileUpdate.weaknesses,
-      });
+    // 9. Update learner profile in the background so the user doesn't wait
+    if (shouldCreateMaterials || shouldTeach) {
+      applyMemoryUpdate(requestId, userId, message, quizResult, classification, profileRow, preferredModel);
     }
 
+    logStep(requestId, "finish", "Response complete", "done", { materials_created });
+
     return NextResponse.json({
+      requestId,
       reply,
       classification,
       curriculum,
       topic,
       materials_created,
       saved_materials: savedMaterials,
-      memory_update: memoryUpdate,
+      interactive,
+      memory_update: null,
     });
   } catch (err) {
     console.error("Agent error:", err);

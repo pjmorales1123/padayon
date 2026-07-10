@@ -31,3 +31,40 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id: topicId } = await params;
+    const { title } = await req.json();
+
+    if (!title || typeof title !== "string" || title.trim().length === 0) {
+      return NextResponse.json({ error: "Missing title" }, { status: 400 });
+    }
+
+    const { data: topic, error } = await supabaseAdmin!
+      .from("topics")
+      .update({ title: title.trim() })
+      .eq("id", topicId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return NextResponse.json({ success: true, topic });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id: topicId } = await params;
+
+    const { error } = await supabaseAdmin!.from("topics").delete().eq("id", topicId);
+    if (error) throw error;
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

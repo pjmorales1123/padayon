@@ -59,8 +59,11 @@ export async function POST(req: NextRequest) {
     const lsEntries = lsUpdate
       .split(",")
       .map((s) => s.trim())
-      .filter((s) => s.length > 0)
+      .filter((s) => s.length > 0 && !/no change|none|n\/a/i.test(s))
       .map((s) => [s, true]);
+
+    const newStrength = (memoryUpdate.strength_update || "").trim();
+    const newWeakness = (memoryUpdate.weakness_update || "").trim();
 
     if (existingProfile) {
       await supabaseAdmin!
@@ -70,8 +73,8 @@ export async function POST(req: NextRequest) {
             ...existingProfile.learning_style,
             ...Object.fromEntries(lsEntries),
           },
-          strengths: [...new Set([...(existingProfile.strengths || []), memoryUpdate.strength_update])],
-          weaknesses: [...new Set([...(existingProfile.weaknesses || []), memoryUpdate.weakness_update])],
+          strengths: [...new Set([...(existingProfile.strengths || []), ...(newStrength && !/no change|none|n\/a/i.test(newStrength) ? [newStrength] : [])])],
+          weaknesses: [...new Set([...(existingProfile.weaknesses || []), ...(newWeakness && !/no change|none|n\/a/i.test(newWeakness) ? [newWeakness] : [])])],
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingProfile.id);

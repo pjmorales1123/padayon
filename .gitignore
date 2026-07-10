@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tunnel binaries/logs
+cloudflared.exe
+cloudflared.log
+
+# python cache
+__pycache__/

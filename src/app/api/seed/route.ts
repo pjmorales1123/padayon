@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       .upsert(
         {
           user_id: userId,
-          language_confidence: { Cebuano: "High", Filipino: "Medium", "Academic English": "Developing" },
+          language_confidence: { English: "High", Filipino: "Medium", Cebuano: "Developing", "Academic English": "Developing" },
           learning_style: { analogies: true, visuals: true, short_explanations: true },
           strengths: ["Real-life examples", "Story-based explanations", "Diagrams"],
           weaknesses: ["Scientific vocabulary", "Process order in Photosynthesis"],

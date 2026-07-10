@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -45,17 +46,32 @@ const tabs = [
   "Reviewer",
   "Flashcards",
   "Quiz",
+  "Story",
   "Progress",
 ];
 
-export default function TopicPage() {
+const studyMethods = [
+  { key: "eli5", label: "Explain like I'm 5" },
+  { key: "mnemonic", label: "Make a mnemonic" },
+  { key: "story", label: "Tell me a story" },
+];
+
+function TopicPageInner() {
   const { id } = useParams() as { id: string };
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const userId = searchParams?.get("userId") || DEMO_USER_ID;
+
   const [topic, setTopic] = useState<Topic | null>(null);
   const [activeTab, setActiveTab] = useState("Overview");
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
   const [quizSubmitting, setQuizSubmitting] = useState(false);
   const [quizFeedback, setQuizFeedback] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState("");
+  const [methodReply, setMethodReply] = useState<string | null>(null);
+  const [methodLoading, setMethodLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -68,6 +84,12 @@ export default function TopicPage() {
 
   const getMaterial = (type: string): Material | undefined =>
     topic?.materials?.find((m) => m.type === type);
+
+  const refreshTopic = async () => {
+    const res = await fetch(`/api/topic/${id}`);
+    const d = await res.json();
+    if (d.topic) setTopic(d.topic);
+  };
 
   const submitQuiz = async () => {
     if (!topic || !id) return;
@@ -90,7 +112,7 @@ export default function TopicPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: DEMO_USER_ID,
+          userId,
           topicId: id,
           score,
           total: questions.length,
@@ -100,15 +122,62 @@ export default function TopicPage() {
       const data = await res.json();
       if (data.success) {
         setQuizFeedback(`Score: ${score}/${questions.length} (${data.percentage}%)`);
-        // Refresh topic to show updated progress
-        const refreshed = await fetch(`/api/topic/${id}`).then((r) => r.json());
-        if (refreshed.topic) setTopic(refreshed.topic);
+        await refreshTopic();
       }
     } catch (err) {
       console.error("Quiz submit failed", err);
     } finally {
       setQuizSubmitting(false);
       setShowResults(true);
+    }
+  };
+
+  const renameTopic = async () => {
+    const title = titleInput.trim();
+    if (!title || !id) return;
+    const res = await fetch(`/api/topic/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setTopic((prev) => (prev ? { ...prev, title } : prev));
+      setEditingTitle(false);
+    }
+  };
+
+  const deleteTopic = async () => {
+    if (!topic || !window.confirm(`Delete "${topic.title}" permanently?`)) return;
+    const res = await fetch(`/api/topic/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.success) router.push(`/library?userId=${userId}`);
+  };
+
+  const runStudyMethod = async (key: string) => {
+    if (!topic) return;
+    const base = topic.title;
+    let message = "";
+    if (key === "eli5") message = `Explain ${base} like I'm 5 years old.`;
+    if (key === "mnemonic") message = `Create a simple mnemonic or memory trick for ${base}.`;
+    if (key === "story") message = `Tell me a short story to help me remember ${base}.`;
+
+    setMethodLoading(true);
+    setMethodReply(null);
+    try {
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, message }),
+      });
+      const data = await res.json();
+      setMethodReply(data.reply || "No response.");
+      await refreshTopic();
+    } catch (err) {
+      console.error("Study method failed", err);
+      setMethodReply("Something went wrong. Please try again.");
+    } finally {
+      setMethodLoading(false);
     }
   };
 
@@ -206,16 +275,24 @@ export default function TopicPage() {
       case "Clean Notes": {
         const m = getMaterial("clean_notes");
         return (
-          <div className="whitespace-pre-wrap text-slate-800 bg-slate-50 rounded-xl p-4 border border-slate-200">
-            {m?.content?.text || "No clean notes yet."}
+          <div className="bg-white rounded-xl p-4 border border-slate-200">
+            {m?.content?.text ? (
+              <MarkdownRenderer>{m.content.text}</MarkdownRenderer>
+            ) : (
+              <p className="text-slate-400">No clean notes yet.</p>
+            )}
           </div>
         );
       }
       case "Reviewer": {
         const m = getMaterial("reviewer");
         return (
-          <div className="whitespace-pre-wrap text-slate-800 bg-slate-50 rounded-xl p-4 border border-slate-200">
-            {m?.content?.text || "No reviewer yet."}
+          <div className="bg-white rounded-xl p-4 border border-slate-200">
+            {m?.content?.text ? (
+              <MarkdownRenderer>{m.content.text}</MarkdownRenderer>
+            ) : (
+              <p className="text-slate-400">No reviewer yet.</p>
+            )}
           </div>
         );
       }
@@ -312,6 +389,21 @@ export default function TopicPage() {
           </div>
         );
       }
+      case "Story": {
+        const m = getMaterial("story");
+        return (
+          <div className="rounded-xl bg-white border border-slate-200 p-5">
+            <h2 className="font-semibold text-slate-800 mb-3">A story to remember {topic.title}</h2>
+            {m?.content?.text ? (
+              <MarkdownRenderer>{m.content.text}</MarkdownRenderer>
+            ) : (
+              <p className="text-slate-700 leading-relaxed">
+                No story yet. Try asking PADAYON to tell you a story about this topic.
+              </p>
+            )}
+          </div>
+        );
+      }
       case "Progress":
         return renderProgress();
       default:
@@ -322,12 +414,69 @@ export default function TopicPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-slate-900">
-          {topic?.title || "Topic"}
-        </h1>
-        <Link href="/library" className="text-sm text-blue-600 hover:underline">
-          Library
-        </Link>
+        <div className="flex items-center gap-2">
+          {editingTitle ? (
+            <input
+              value={titleInput}
+              onChange={(e) => setTitleInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && renameTopic()}
+              onBlur={renameTopic}
+              autoFocus
+              className="text-2xl font-bold text-slate-900 rounded border border-slate-300 px-2 py-1"
+            />
+          ) : (
+            <h1 className="text-2xl font-bold text-slate-900">
+              {topic?.title || "Topic"}
+            </h1>
+          )}
+          <button
+            onClick={() => {
+              setEditingTitle(true);
+              setTitleInput(topic?.title || "");
+            }}
+            className="text-sm text-slate-500 hover:text-blue-600"
+          >
+            Rename
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link href={`/library?userId=${userId}`} className="text-sm text-blue-600 hover:underline">
+            Library
+          </Link>
+          <button
+            onClick={deleteTopic}
+            className="text-sm text-red-500 hover:text-red-700"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 mb-6">
+        <h3 className="text-sm font-semibold text-blue-900 mb-2">Study methods</h3>
+        <div className="flex flex-wrap gap-2">
+          {studyMethods.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => runStudyMethod(m.key)}
+              disabled={methodLoading}
+              className="rounded-lg bg-white border border-blue-200 text-blue-800 px-3 py-1.5 text-sm hover:bg-blue-100 disabled:opacity-50"
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {methodLoading && (
+          <p className="text-sm text-blue-700 mt-2 flex items-center gap-2">
+            <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            Asking PADAYON...
+          </p>
+        )}
+        {methodReply && (
+          <div className="mt-3 text-sm text-slate-800 bg-white rounded-lg p-3 border border-blue-100">
+            <MarkdownRenderer>{methodReply}</MarkdownRenderer>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 overflow-x-auto mb-6 pb-1">
@@ -351,5 +500,13 @@ export default function TopicPage() {
 
       {renderContent()}
     </main>
+  );
+}
+
+export default function TopicPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading topic...</div>}>
+      <TopicPageInner />
+    </Suspense>
   );
 }

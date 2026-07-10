@@ -1,0 +1,11 @@
+.git
+node_modules
+.next
+out
+.env.local
+cloudflared.exe
+cloudflared.log
+*.log
+__pycache__
+.vscode
+.idea

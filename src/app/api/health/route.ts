@@ -20,7 +20,13 @@ export async function GET(_req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ ready: true, message: "Database is ready." });
+    return NextResponse.json({
+      ready: true,
+      message: "Database is ready.",
+      defaultModel: process.env.FIREWORKS_MODEL || "accounts/fireworks/models/deepseek-v4-flash",
+      gemma3Configured: !!(process.env.GEMMA_3_DEPLOYMENT || process.env.GEMMA_3_ENDPOINT),
+      gemma4Configured: !!(process.env.GEMMA_4_DEPLOYMENT || process.env.GEMMA_4_ENDPOINT),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json(

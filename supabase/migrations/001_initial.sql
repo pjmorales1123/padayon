@@ -1,8 +1,16 @@
 -- PADAYON Database Schema
+-- Drop tables in reverse dependency order to allow clean re-runs
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS materials CASCADE;
+DROP TABLE IF EXISTS topics CASCADE;
+DROP TABLE IF EXISTS subjects CASCADE;
+DROP TABLE IF EXISTS learner_profiles CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS curriculum_items CASCADE;
 
--- Users table
+-- Users table (TEXT id so demo/external ids like "demo-user-id" work)
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -10,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Learner profiles table
 CREATE TABLE IF NOT EXISTS learner_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   language_confidence JSONB DEFAULT '{}'::JSONB,
   learning_style JSONB DEFAULT '{}'::JSONB,
   strengths JSONB DEFAULT '[]'::JSONB,
@@ -23,7 +31,7 @@ CREATE TABLE IF NOT EXISTS learner_profiles (
 -- Subjects table
 CREATE TABLE IF NOT EXISTS subjects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id, name)
@@ -55,7 +63,7 @@ CREATE TABLE IF NOT EXISTS materials (
 -- Messages table
 CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
@@ -99,7 +107,7 @@ INSERT INTO learner_profiles
 (user_id, language_confidence, learning_style, strengths, weaknesses, study_habits)
 VALUES
 ('demo-user-id',
- '{"Cebuano": "High", "Filipino": "Medium", "Academic English": "Developing"}'::JSONB,
+ '{"English": "High", "Filipino": "Medium", "Cebuano": "Developing", "Academic English": "Developing"}'::JSONB,
  '{"analogies": true, "visuals": true, "short_explanations": true}'::JSONB,
  '["Real-life examples", "Story-based explanations", "Diagrams"]'::JSONB,
  '["Scientific vocabulary", "Process order in Photosynthesis"]'::JSONB,
