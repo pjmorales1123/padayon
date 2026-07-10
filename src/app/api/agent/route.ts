@@ -85,6 +85,18 @@ function normalizeClassification(
   let subcategory = (classification.subcategory || "").trim();
   let topic = (classification.topic || "").trim();
 
+  // If the message looks like messy notes / keyword dump but was classified as teach_topic,
+  // convert it to create_study_pack so PADAYON organizes and builds materials.
+  if (intent === "teach_topic" && !/\?$|^what|^how|^why|^when|^where|^who|explain|describe|mean|difference between|compare|give me|tell me/i.test(message)) {
+    const wordCount = message.split(/\s+/).filter((w) => w.length > 2).length;
+    const hasAcademicKeywords = /photosynthesis|chlorophyll|cellular|respiration|ecosystem|quadratic|factoring|polynomial|irony|characterization|metaphor|simile|personification|hyperbole|theme|plot|setting/i.test(message);
+    const looksLikeNotes = wordCount >= 4 && (message.includes(",") || message.includes("-") || hasAcademicKeywords);
+    if (looksLikeNotes) {
+      intent = "create_study_pack";
+      logStep(requestId, "classify", "Converted keyword dump / notes to create_study_pack", "done");
+    }
+  }
+
   // If retrieval/continue intent lacks a clear topic, fall back to the last active topic.
   if (isRetrievalLike && lastActive && (subject === "Unknown" || subject === "" || topic === "Unknown" || topic === "" || topic.length < 2)) {
     subject = lastActive.subjectName;
@@ -105,6 +117,19 @@ function normalizeClassification(
     else if (/music|art|dance|physical education|health|nutrition/.test(lower)) subject = "MAPEH";
     else if (/tula|sanaysay|pandiwa|pang-uri|pang-abay|pilipinas/.test(lower)) subject = "Filipino";
   }
+
+  // Canonicalize topic titles to avoid duplicates like "Photosynthesis" vs "Photosynthesis inputs and outputs".
+  const topicLower = topic.toLowerCase();
+  if (topicLower.includes("photosynthesis")) topic = "Photosynthesis";
+  else if (topicLower.includes("cellular respiration")) topic = "Cellular Respiration";
+  else if (topicLower.includes("ecosystem")) topic = "Ecosystem";
+  else if (topicLower.includes("quadratic formula")) topic = "Quadratic Formula";
+  else if (topicLower.includes("quadratic")) topic = "Quadratic Equations";
+  else if (topicLower.includes("factoring")) topic = "Factoring";
+  else if (topicLower.includes("irony")) topic = "Irony";
+  else if (topicLower.includes("characterization")) topic = "Characterization";
+  else if (topicLower.includes("point of view")) topic = "Point of View";
+  else if (topicLower.includes("metaphor") || topicLower.includes("simile") || topicLower.includes("personification") || topicLower.includes("hyperbole") || topicLower.includes("figurative")) topic = "Figures of Speech";
 
   // Ensure subcategory is never empty.
   if (!subcategory) subcategory = "General";
@@ -294,9 +319,15 @@ async function applyMemoryUpdate(
     );
 
     const lsUpdate = memoryUpdate.learning_style_update || "";
+    const normalizeStyle = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
     const lsEntries = lsUpdate
       .split(",")
-      .map((s) => s.trim())
+      .map((s) => normalizeStyle(s))
       .filter((s) => s.length > 0 && !/no change|none|n\/a/i.test(s))
       .map((s) => [s, true]);
 

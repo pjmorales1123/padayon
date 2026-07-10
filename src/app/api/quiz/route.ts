@@ -56,9 +56,15 @@ export async function POST(req: NextRequest) {
 
     // Merge memory update into profile
     const lsUpdate = memoryUpdate.learning_style_update || "";
+    const normalizeStyle = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
     const lsEntries = lsUpdate
       .split(",")
-      .map((s) => s.trim())
+      .map((s) => normalizeStyle(s))
       .filter((s) => s.length > 0 && !/no change|none|n\/a/i.test(s))
       .map((s) => [s, true]);
 

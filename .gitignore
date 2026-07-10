@@ -51,3 +51,7 @@ server.log
 webbridge-*.json
 ui-check.png
 persona-marathon.log
+test-*.jpg
+test-*.png
+test-*.pdf
+test-*.txt

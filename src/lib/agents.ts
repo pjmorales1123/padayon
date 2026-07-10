@@ -133,7 +133,7 @@ Analyze the student input and return ONLY valid JSON with exactly these fields:
 
 Intent rules:
 - Use "teach_topic" when the student is asking a question, wants an explanation, or is just chatting about a topic (e.g., "What is meter?", "explain ezra pound", "let's play a game").
-- Use "create_study_pack" ONLY when the student provides notes/material to organize or explicitly asks for a full study pack (e.g., "make me a reviewer", "organize my notes", "create a study pack").
+- Use "create_study_pack" when the student provides messy notes, a list of keywords, or study material to organize (e.g., "photosynthesis chlorophyll sunlight CO2", "irony sarcasm dramatic irony", or a pasted list of terms). Treat keyword dumps and pasted notes as material to organize, not as a question.
 - Use "retrieve_material" ONLY when the student explicitly asks to see existing saved materials (e.g., "show my flashcards", "where is my quiz", "my summary"). Do NOT use it for general questions like "look at" or "tell me about".
 - Use "continue_learning" when the student clearly returns to a previous topic (e.g., "continue", "go back to").
 - Use "research_topics" when the student missed a lesson, is unsure what topic to study, or asks what was discussed (e.g., "I didn't listen earlier, what did we talk about?", "wala ko nakadungog sa lesson ganina", "show me related topics", "what topics are in this subject?").
