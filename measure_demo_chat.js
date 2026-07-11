@@ -17,10 +17,13 @@ function measure() {
       : null;
   };
   const chat = document.querySelector('[aria-label="PADAYON chat workspace"]');
+  const wrapper = chat?.parentElement;
+  const chatPanel = wrapper?.parentElement;
   return {
     main: get('main'),
     grid: get('main > div.grid'),
-    chatPanel: get(chat?.parentElement),
+    chatPanel: get(chatPanel),
+    wrapper: get(wrapper),
     chat: get(chat),
     chatMain: get(chat?.querySelector('main')),
     scroll: get(chat?.querySelector('[class*="overflow-y-auto"]')),

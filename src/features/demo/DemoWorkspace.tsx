@@ -169,38 +169,18 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
           <LearnerSummary userId={userId} refreshKey={refreshKey} />
         </div>
 
-        <div className={`${panelClass("chat")} grid min-w-0 min-h-0 overflow-hidden gap-3 [grid-template-rows:minmax(0,1fr)_auto]`}>
-          <div className="min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <ChatWorkspace
-              key={`${userId}-${promptKey}`}
-              embedded
-              initialModel="auto"
-              userId={userId}
-              initialPrompt={initialPrompt}
-              autoSend={autoSend}
-              initialRequestId={activeRequestId ?? undefined}
-              onRequestStart={setActiveRequestId}
-              onRequestComplete={setActiveRequestId}
-            />
-          </div>
-
-          <div className="min-h-0 rounded-xl border border-slate-200 bg-white p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Try these judge prompts
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {DEMO_PERSONAS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => sendPersonaPrompt(p.prompt)}
-                  disabled={activeRequestId !== null}
-                  className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs text-slate-700 transition hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
-                >
-                  {p.prompt}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden`}>
+          <ChatWorkspace
+            key={`${userId}-${promptKey}`}
+            embedded
+            initialModel="auto"
+            userId={userId}
+            initialPrompt={initialPrompt}
+            autoSend={autoSend}
+            initialRequestId={activeRequestId ?? undefined}
+            onRequestStart={setActiveRequestId}
+            onRequestComplete={setActiveRequestId}
+          />
         </div>
 
         <div className={`${panelClass("agents")} min-h-0 overflow-hidden`}>
