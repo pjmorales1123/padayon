@@ -378,7 +378,7 @@ export async function teachingAgent(
   const imageHint = imageUrl
     ? `
 
-The student uploaded a picture of their notes. The extracted text is included in the Student message below. In your reply: (1) acknowledge you received their notes, (2) summarize the key points from the extracted text in 2-3 short sentences, and (3) confirm the notes were saved to their study pack. Do not say you cannot see images.`
+The student uploaded a picture of their notes. Extracted text: "${message.replace(/"/g, '\"')}". In your reply you MUST: (1) acknowledge you received the notes, (2) summarize the extracted text in 2-3 short sentences, and (3) confirm the notes were saved to the study pack. Do not say you cannot see images.`
     : "";
 
   const prompt = `You are the Teaching Agent for PADAYON, an AI learning partner for Grade 9 students in the Philippines.
