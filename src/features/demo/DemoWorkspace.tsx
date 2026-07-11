@@ -88,7 +88,7 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
   };
 
   return (
-    <main className="flex h-screen flex-col bg-slate-100 overflow-hidden">
+    <main className="flex h-screen flex-col bg-slate-100 overflow-hidden pb-16">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
@@ -173,6 +173,7 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
           <div className="flex-1 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <ChatWorkspace
               key={`${userId}-${promptKey}`}
+              embedded
               initialModel="auto"
               userId={userId}
               initialPrompt={initialPrompt}

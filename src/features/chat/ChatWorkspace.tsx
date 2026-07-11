@@ -78,6 +78,7 @@ export interface ChatWorkspaceProps {
   initialPrompt?: string;
   autoSend?: boolean;
   initialRequestId?: string;
+  embedded?: boolean;
   onRequestStart?: (requestId: string) => void;
   onRequestComplete?: (requestId: string) => void;
 }
@@ -88,6 +89,7 @@ export default function ChatWorkspace({
   initialPrompt = "",
   autoSend = false,
   initialRequestId,
+  embedded = false,
   onRequestStart,
   onRequestComplete,
 }: ChatWorkspaceProps) {
@@ -496,10 +498,8 @@ export default function ChatWorkspace({
   const runtimeClass = runtimeBadgeClass(lastRuntime);
 
   return (
-    <section aria-label="PADAYON chat workspace">
-      
-
-      <main className="max-w-3xl mx-auto px-4 py-4 flex flex-col h-[calc(100vh-2rem)]">
+    <section aria-label="PADAYON chat workspace" className={embedded ? "h-full" : undefined}>
+      <main className={`max-w-3xl mx-auto px-4 py-4 flex flex-col ${embedded ? "h-full" : "h-[calc(100vh-4rem)]"}`}>
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
