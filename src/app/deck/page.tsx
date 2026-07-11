@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Home } from "lucide-react";
+import { buildAppHref } from "@/lib/navigation";
 
 const SLIDES = [
   {
@@ -170,7 +173,9 @@ function Badge({ text, color }: { text: string; color: "purple" | "red" | "blue"
   );
 }
 
-export default function Deck() {
+function DeckInner() {
+  const searchParams = useSearchParams();
+  const userId = searchParams?.get("userId") || undefined;
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
@@ -231,10 +236,23 @@ export default function Deck() {
             />
           ))}
         </div>
-        <Link href="/" className="text-sm text-blue-600 hover:underline">
-          Exit deck
+        <Link
+          href={buildAppHref("/", userId)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+          aria-label="Home"
+        >
+          <Home className="h-4 w-4" />
+          <span className="hidden sm:inline">Home</span>
         </Link>
       </div>
     </main>
+  );
+}
+
+export default function Deck() {
+  return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center text-slate-500">Loading deck...</div>}>
+      <DeckInner />
+    </Suspense>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import AppNavigation from "@/components/navigation/AppNavigation";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -20,7 +21,10 @@ interface Profile {
   study_habits: Record<string, string>;
 }
 
-export default function Profile() {
+function ProfileInner() {
+  const searchParams = useSearchParams();
+  const userId = searchParams?.get("userId") || DEMO_USER_ID;
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,7 +39,7 @@ export default function Profile() {
   const [studyHabits, setStudyHabits] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetch(`/api/profile?userId=${DEMO_USER_ID}`)
+    fetch(`/api/profile?userId=${userId}`)
       .then((r) => r.json())
       .then((d) => {
         setProfile(d.profile);
@@ -49,7 +53,7 @@ export default function Profile() {
           setStudyHabits(d.profile.study_habits || {});
         }
       });
-  }, []);
+  }, [userId]);
 
   const save = async () => {
     setLoading(true);
@@ -59,7 +63,7 @@ export default function Profile() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: DEMO_USER_ID,
+          userId,
           name,
           language_confidence: languageConfidence,
           learning_style: learningStyle,
@@ -85,13 +89,11 @@ export default function Profile() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-slate-900">
           {displayName}&apos;s Learning Profile
         </h1>
-        <Link href="/" className="text-sm text-blue-600 hover:underline">
-          Home
-        </Link>
+        <AppNavigation userId={userId} />
       </div>
 
       {saved && (
@@ -275,5 +277,13 @@ export default function Profile() {
         PADAYON does not just answer. It grows with the learner.
       </div>
     </main>
+  );
+}
+
+export default function Profile() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading profile...</div>}>
+      <ProfileInner />
+    </Suspense>
   );
 }

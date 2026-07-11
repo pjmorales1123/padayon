@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import AppNavigation from "@/components/navigation/AppNavigation";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -122,6 +123,12 @@ export default function Home() {
           {seedResult && <p className="text-sm mt-2">{seedResult}</p>}
         </div>
       )}
+
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200">
+        <div className="max-w-5xl mx-auto px-4 py-3">
+          <AppNavigation userId={DEMO_USER_ID} />
+        </div>
+      </header>
 
       {/* Hero */}
       <section className="max-w-5xl mx-auto px-4 pt-12 pb-10 text-center">

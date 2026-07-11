@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import AppNavigation from "@/components/navigation/AppNavigation";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -129,11 +130,9 @@ function LibraryInner() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Library</h1>
-        <Link href="/" className="text-sm text-blue-600 hover:underline">
-          Home
-        </Link>
+        <AppNavigation userId={userId} />
       </div>
 
       <div className="flex gap-2 mb-6">

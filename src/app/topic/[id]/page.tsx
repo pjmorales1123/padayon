@@ -4,6 +4,8 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
+import AppNavigation from "@/components/navigation/AppNavigation";
+import { buildAppHref } from "@/lib/navigation";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -413,7 +415,7 @@ function TopicPageInner() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           {editingTitle ? (
             <input
@@ -440,8 +442,12 @@ function TopicPageInner() {
           </button>
         </div>
         <div className="flex items-center gap-3">
-          <Link href={`/library?userId=${userId}`} className="text-sm text-blue-600 hover:underline">
-            Library
+          <AppNavigation userId={userId} />
+          <Link
+            href={buildAppHref("/library", userId)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            ← Back
           </Link>
           <button
             onClick={deleteTopic}
