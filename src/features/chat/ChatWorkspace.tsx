@@ -446,9 +446,14 @@ export default function ChatWorkspace({
 
     try {
       const text = await ocrImageDataUrl(dataUrl, requestId);
+      const preview = text.split("\n").slice(0, 2).join(" ").slice(0, 120);
       setMessages((prev) => [
         ...prev,
-        { role: "user", content: `[Uploaded image]\n${text}`, imageUrl: dataUrl },
+        {
+          role: "user",
+          content: `[Uploaded image]${preview ? `\n${preview}${text.length > 120 ? "..." : ""}` : ""}`,
+          imageUrl: dataUrl,
+        },
       ]);
       send(text, dataUrl, true, "image");
     } catch (err) {

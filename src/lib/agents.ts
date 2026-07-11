@@ -376,7 +376,7 @@ export async function teachingAgent(
   const imageHint = imageUrl
     ? `
 
-The student uploaded a picture of their notes. The text has already been extracted and is included in their message. Acknowledge that you can see their notes, respond based on the extracted text, and encourage them. Do not say you cannot see images.`
+The student uploaded a picture of their notes. The text has already been extracted and is included in their message. Acknowledge that you can see their notes, briefly summarize the key points if they are notes, and confirm the notes were saved to their study pack. Do not say you cannot see images.`
     : "";
 
   const prompt = `You are the Teaching Agent for PADAYON, an AI learning partner for Grade 9 students in the Philippines.
