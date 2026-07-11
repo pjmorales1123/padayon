@@ -130,7 +130,7 @@ export default function Home() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
           </span>
-          Built for AMD Developer Hackathon: ACT II — Gemma 4 + AMD GPUs
+          AMD Developer Hackathon: ACT II — Gemma 4 learning partner
         </div>
         <h1 className="text-4xl sm:text-6xl font-extrabold text-slate-900 tracking-tight mb-6">
           PADAYON
@@ -162,7 +162,7 @@ export default function Home() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { icon: "🧠", title: "Agent pipeline", body: "Classifier, curriculum, material creator, teacher & memory agents work together." },
-            { icon: "📸", title: "Photo to notes", body: "Snap a picture of handwritten notes and get clean flashcards, quizzes & summaries." },
+            { icon: "📸", title: "Smart import", body: "Upload photos or a lesson PDF and get clean flashcards, quizzes, summaries & stories." },
             { icon: "🌐", title: "Translanguaging", body: "Explains in Cebuano or Filipino first, then bridges to academic English." },
             { icon: "📊", title: "Adaptive memory", body: "Learns your strengths, weaknesses, and style across every conversation." },
           ].map((f) => (
