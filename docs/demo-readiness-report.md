@@ -106,3 +106,68 @@ Gemma verification (Task 8) may now proceed.
 
 - No credentials, API keys, or full request payloads are included in this report.
 - All tested requests used the Fireworks serverless fallback path; no paid Gemma inference was consumed during this gate.
+
+## Gate 2 — Gemma verification
+
+### Gemma endpoint configuration
+
+- Added to `.env.local`:
+  ```
+  GEMMA_4_DEPLOYMENT=accounts/princejirehmorales-2/deployments/ymlz8joa
+  ```
+- `/api/health` then returned `gemma4Configured: true`.
+
+### Scaling and warmup
+
+```powershell
+node scripts/gemma4-scale.js up
+```
+
+The deployment reached `READY` with one replica after ~75 seconds, then needed an additional ~3.5 minutes before inference requests succeeded (`DEPLOYMENT_SCALING_UP` → success).
+
+### Gemma success test
+
+Prompt sent with `model: "gemma-4"`:
+
+```powershell
+curl -s -X POST http://localhost:3000/api/agent -H 'Content-Type: application/json' -d '{"userId":"demo-bisaya-learner","model":"gemma-4","requestId":"gemma-real-test-4","message":"Explain photosynthesis like I am 10"}'
+```
+
+**Result:**
+
+- Response delivered in Cebuano-first style for Juan.
+- `model_runtime` reported:
+  ```json
+  { "requested": "gemma-4", "provider": "gemma", "model": "accounts/princejirehmorales-2/deployments/ymlz8joa", "fallback": false }
+  ```
+- The UI badge would read **Gemma 4**.
+
+### Gemma fallback truthfulness test
+
+Before the deployment was fully warm, the same prompt with `model: "gemma-4"` returned:
+
+```json
+{ "requested": "gemma-4", "provider": "fireworks", "model": "accounts/fireworks/models/deepseek-v4-flash", "fallback": true }
+```
+
+The response still succeeded and the badge would read **Fallback · Fireworks**.
+
+### Scale-down
+
+```powershell
+node scripts/gemma4-scale.js down
+```
+
+Deployment desired replica count set to 0 to stop billing.
+
+### Gemma gate verdict
+
+**PASS.**
+
+Gemma 4 served a real request through the Fireworks on-demand deployment, the runtime badge truthfully reported `provider: "gemma"`, and the fallback path was verified when the deployment was still cold. The deployment was scaled down after testing.
+
+### Demo-day Gemma note
+
+- Scale up the deployment 4–5 minutes before the judged Gemma moment.
+- Use **Auto** for setup and practice to save credits.
+- Switch to **Gemma 4** only for the judged demo run, then scale down again.

@@ -7,10 +7,10 @@
 
 1. Open https://padayon-theta.vercel.app
 2. Click **"Reset personas"** on the home page to seed fresh demo profiles.
-3. Confirm Gemma 4 badge shows **"Gemma 4 ready"** in the header.
-4. Open the **Live Demo** or a persona card.
+3. Open the **Live Demo** or click any persona card.
+4. Use the bottom navigation bar to move between Home, Live Demo, Chat, Library, and Profile — the selected learner stays attached to every link.
 
-> Gemma 4 is on an on-demand Fireworks deployment. It burns credits while active, so you can toggle the model selector to **Auto (DeepSeek/Kimi)** for most testing and switch to **Gemma 4** only for the actual demo moments.
+> Gemma 4 uses the Fireworks on-demand deployment `accounts/princejirehmorales-2/deployments/ymlz8joa`. Scale it up 4–5 minutes before the judged demo moment, use **Auto** for setup/practice, and switch to **Gemma 4** only for the judged run. If Gemma is still warming up or unreachable, the badge truthfully switches to **Fallback · Fireworks** and the demo continues.
 
 ---
 
@@ -99,7 +99,26 @@
 
 ---
 
-### 4. Retrieval and continuity
+### 4. Actual-runtime badge (truthful model labeling)
+
+After each assistant reply, look at the model badge above the message list:
+
+- **Auto · primary** — the default Fireworks serverless model served the request.
+- **Gemma 4** — the Gemma endpoint responded and no fallback happened.
+- **Fallback · Fireworks** — Gemma was requested but unreachable, so PADAYON fell back to the reliable serverless model.
+
+**Talking point:** *"The badge tells the truth. If Gemma isn't available, we don't fake it — we fall back and show exactly what ran."*
+
+#### Demo switch point
+
+1. With the model selector on **Auto**, send a prompt and note **Auto · primary**.
+2. Switch the selector to **Gemma 4** and send the same prompt.
+3. If Gemma is configured, the badge reads **Gemma 4**.
+4. If Gemma is not configured, the badge reads **Fallback · Fireworks** and the response still works.
+
+---
+
+### 5. Retrieval and continuity
 
 **Goal:** Show that materials persist and can be retrieved later.
 
@@ -127,11 +146,18 @@ These have fallback seeded materials, so the demo never breaks.
 
 ## Cost warning
 
-Gemma 4 on-demand on NVIDIA H200 burns ~$1.50–$2.50/hour while deployed and active. For the hackathon demo:
+Gemma 4 on-demand on NVIDIA H200 burns credits while deployed and active. For the hackathon demo:
 
 - Use **Auto** model during setup and practice.
+- Scale up `accounts/princejirehmorales-2/deployments/ymlz8joa` 4–5 minutes before the judged run:
+  ```powershell
+  node scripts/gemma4-scale.js up
+  ```
 - Switch to **Gemma 4** only for the judged demo run.
-- Scale down the Fireworks deployment when done.
+- Scale down immediately after the demo:
+  ```powershell
+  node scripts/gemma4-scale.js down
+  ```
 
 ---
 
