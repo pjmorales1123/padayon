@@ -597,7 +597,7 @@ export default function ChatWorkspace({
               title="Create a fresh student profile for testing"
             >
               <span>＋</span>
-              <span>New profile</span>
+              <span className={embedded ? "hidden" : ""}>New profile</span>
             </button>
             <button
               onClick={() => {
@@ -610,7 +610,7 @@ export default function ChatWorkspace({
               title="Start a new conversation"
             >
               <span>🗨️</span>
-              <span>New chat</span>
+              <span className={embedded ? "hidden" : ""}>New chat</span>
             </button>
             <label htmlFor="model-select" className="sr-only">Model</label>
             <select
