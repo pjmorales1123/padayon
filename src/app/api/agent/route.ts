@@ -82,10 +82,19 @@ async function getLastActiveTopic(userId: string): Promise<ActiveTopic | null> {
 function normalizeClassification(
   requestId: string,
   classification: { subject: string; subcategory: string; topic: string; intent: string; language_detected: string; confidence: number },
-  lastActive: ActiveTopic | null
+  lastActive: ActiveTopic | null,
+  originalMessage: string
 ): { subject: string; subcategory: string; topic: string; intent: string; language_detected: string; confidence: number } {
   const lowerIntent = (classification.intent || "").toLowerCase().trim().replace(/\s+/g, "_");
   let intent = VALID_INTENTS.has(lowerIntent) ? lowerIntent : "unknown";
+
+  // Strong visual guard: if the student explicitly asks for a visual/diagram/picture, force make_visual.
+  const lowerOriginal = originalMessage.toLowerCase();
+  if (/(show me a|give me a|draw a|make a|create a)?\s*(visual|diagram|infographic|chart|picture|illustration|drawing|graph|image)/i.test(originalMessage) ||
+      /(diagram of|illustration of|picture of|image of|visual of|infographic of)/i.test(originalMessage)) {
+    intent = "make_visual";
+    logStep(requestId, "classify", "Visual request detected, forcing make_visual intent", "done");
+  }
 
   const message = classification.topic || "";
   const isRetrievalLike = RETRIEVAL_INTENTS.includes(intent) || /show my|my flashcards|my quiz|my notes|my reviewer|continue|review this|reviewer/i.test(message);
@@ -143,12 +152,20 @@ function normalizeClassification(
   // Ensure subcategory is never empty.
   if (!subcategory) subcategory = "General";
 
+  // Force English if the message has no Filipino/Cebuano words.
+  let languageDetected = (classification.language_detected || "English").trim();
+  const hasLocalWord = /(ang|ng|sa|mga|ako|ikaw|siya|ito|iyan|iyon|kami|kayo|sila|tayo|kung|dahil|pero|kasi|hindi|wala|oo|opo|oo nga|sige|salamat|daghang|kay|ug|kini|niya|ila|imo|akoang|imong|iyang|amoa|inyo|atong|ilaang|nako|nimo|niya|nato|ninyo|nila|para|dito|doon|saan|kailan|bakit|paano|sino|ano|unsa|asa|kanus-a|ngano|giunsa|kinsa)/i.test(originalMessage);
+  if (!hasLocalWord && languageDetected !== "English") {
+    languageDetected = "English";
+    logStep(requestId, "classify", "No local language words found; forcing English", "done");
+  }
+
   return {
     subject,
     subcategory,
     topic,
     intent,
-    language_detected: (classification.language_detected || "English").trim(),
+    language_detected: languageDetected,
     confidence: typeof classification.confidence === "number" ? classification.confidence : 0.7,
   };
 }
@@ -444,7 +461,7 @@ export async function POST(req: NextRequest) {
     // 3. Classifier Agent with history context
     logStep(requestId, "classify", "Classifier Agent: detecting subject, topic & intent", "running");
     let classification = await classifierAgent(message, history, preferredModel);
-    classification = normalizeClassification(requestId, classification, lastActiveTopic);
+    classification = normalizeClassification(requestId, classification, lastActiveTopic, message);
 
     // If this message is a quiz follow-up, keep the quiz topic so feedback stays in context.
     if (quizResult?.topic) {
