@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ChatWorkspace from "@/features/chat/ChatWorkspace";
@@ -8,6 +8,7 @@ import { buildAppHref } from "@/lib/navigation";
 import AgentTrail from "./AgentTrail";
 import LearnerSummary from "./LearnerSummary";
 import { DEMO_PERSONAS } from "./demo-personas";
+import { DEFAULT_DEMO_PANEL_WIDTHS, resizeDemoPanels, type DemoPanelDivider, type DemoPanelWidths } from "./panel-layout";
 
 interface DemoWorkspaceProps {
   initialUserId: string;
@@ -24,6 +25,7 @@ const MOBILE_TABS: { key: MobileTab; label: string }[] = [
 
 export default function DemoWorkspace({ initialUserId, startFresh = false }: DemoWorkspaceProps) {
   const router = useRouter();
+  const gridRef = useRef<HTMLDivElement>(null);
   const [userId, setUserId] = useState(initialUserId);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -33,6 +35,12 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
   const [autoSend, setAutoSend] = useState(false);
   const [promptKey, setPromptKey] = useState(0);
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
+  const [panelWidths, setPanelWidths] = useState<DemoPanelWidths>(DEFAULT_DEMO_PANEL_WIDTHS);
+  const [dragState, setDragState] = useState<{
+    divider: DemoPanelDivider;
+    startX: number;
+    startWidths: DemoPanelWidths;
+  } | null>(null);
 
   if (userId !== initialUserId) {
     setUserId(initialUserId);
@@ -44,6 +52,25 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
     return () => clearTimeout(timeout);
   }, [resetState]);
 
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const width = gridRef.current?.getBoundingClientRect().width || 1;
+      const deltaPercent = ((event.clientX - dragState.startX) / width) * 100;
+      setPanelWidths(resizeDemoPanels(dragState.startWidths, dragState.divider, deltaPercent));
+    };
+
+    const handlePointerUp = () => setDragState(null);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [dragState]);
+
   const handlePersonaChange = (selectedId: string) => {
     if (selectedId === userId) return;
     router.replace(buildAppHref("/demo", selectedId), { scroll: false });
@@ -52,13 +79,6 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
     setAutoSend(false);
     setPromptKey((k) => k + 1);
     setRefreshKey((k) => k + 1);
-  };
-
-  const sendPersonaPrompt = (prompt: string) => {
-    setActiveRequestId(null);
-    setInitialPrompt(prompt);
-    setAutoSend(true);
-    setPromptKey((k) => k + 1);
   };
 
   const handleRequestComplete = () => {
@@ -91,6 +111,17 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
     const activeMobile = mobileTab === tab ? "block" : "hidden";
     return `${activeMobile} md:block min-h-0 overflow-hidden`;
   };
+
+  const startPanelResize = (divider: DemoPanelDivider, clientX: number) => {
+    setDragState({ divider, startX: clientX, startWidths: panelWidths });
+  };
+
+  const panelGridStyle = {
+    "--demo-panel-columns": `${panelWidths[0]}fr 8px ${panelWidths[1]}fr 8px ${panelWidths[2]}fr`,
+  } as CSSProperties;
+
+  const resizeHandleClass =
+    "hidden lg:flex min-h-0 cursor-col-resize items-center justify-center rounded-full bg-slate-300/70 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
     <main className="flex h-[100dvh] flex-col bg-slate-100 overflow-hidden pb-16 box-border">
@@ -169,7 +200,11 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 p-4 grid-rows-[minmax(0,1fr)] [grid-template-columns:minmax(0,1fr)] md:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] lg:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div
+        ref={gridRef}
+        style={panelGridStyle}
+        className="grid min-h-0 flex-1 gap-4 p-4 grid-rows-[minmax(0,1fr)] [grid-template-columns:minmax(0,1fr)] md:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] lg:[grid-template-columns:var(--demo-panel-columns)]"
+      >
         <div className={`${panelClass("profile")} md:col-span-2 lg:col-span-1 min-h-0 overflow-hidden flex flex-col gap-2`}>
           <div className="hidden lg:block rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
             <p className="text-xs font-medium text-blue-800">
@@ -178,6 +213,15 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
           </div>
           <LearnerSummary userId={userId} refreshKey={refreshKey} />
         </div>
+
+        <button
+          type="button"
+          aria-label="Resize learner summary and chat"
+          title="Resize learner summary and chat"
+          className={resizeHandleClass}
+          onPointerDown={(event) => startPanelResize("left", event.clientX)}
+          onDoubleClick={() => setPanelWidths(DEFAULT_DEMO_PANEL_WIDTHS)}
+        />
 
         <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden`}>
           <div className="hidden lg:block rounded-xl border border-purple-200 bg-purple-50 px-3 py-2">
@@ -198,6 +242,15 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
             onRequestComplete={handleRequestComplete}
           />
         </div>
+
+        <button
+          type="button"
+          aria-label="Resize chat and agent trail"
+          title="Resize chat and agent trail"
+          className={resizeHandleClass}
+          onPointerDown={(event) => startPanelResize("right", event.clientX)}
+          onDoubleClick={() => setPanelWidths(DEFAULT_DEMO_PANEL_WIDTHS)}
+        />
 
         <div className={`${panelClass("agents")} min-h-0 overflow-hidden flex flex-col gap-2`}>
           <div className="hidden lg:block rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
