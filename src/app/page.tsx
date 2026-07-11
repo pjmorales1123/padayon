@@ -27,6 +27,11 @@ const DEMO_PERSONAS = [
   { id: "demo-struggling-student", name: "Bea", tag: "Needs support" },
 ];
 
+const BASE_PROFILES = [
+  { id: DEMO_USER_ID, name: "Demo Student" },
+  ...DEMO_PERSONAS.map((p) => ({ id: p.id, name: `${p.name} · ${p.tag}` })),
+];
+
 export default function Home() {
   const router = useRouter();
   const [activeUserId, setActiveUserId] = useState(DEMO_USER_ID);
@@ -65,8 +70,7 @@ export default function Home() {
     // Load recently used local profiles from this browser
     const stored = typeof window !== "undefined" ? localStorage.getItem("padayon_profiles") : null;
     const localProfiles = stored ? (JSON.parse(stored) as Profile[]) : [];
-    const base = [{ id: DEMO_USER_ID, name: "Demo Student" }, ...DEMO_PERSONAS.map((p) => ({ id: p.id, name: `${p.name} · ${p.tag}` }))];
-    const merged = [...base, ...localProfiles.filter((p) => !base.some((b) => b.id === p.id))];
+    const merged = [...BASE_PROFILES, ...localProfiles.filter((p) => !BASE_PROFILES.some((b) => b.id === p.id))];
     setProfiles(merged);
   }, []);
 
@@ -91,7 +95,7 @@ export default function Home() {
       }
       const updated = [...profiles, { id: data.userId, name: newName }];
       setProfiles(updated);
-      localStorage.setItem("padayon_profiles", JSON.stringify(updated.slice(6)));
+      localStorage.setItem("padayon_profiles", JSON.stringify(updated.slice(BASE_PROFILES.length)));
       setActiveUserId(data.userId);
       router.push(buildAppHref("/chat", data.userId));
     } catch {
