@@ -2,24 +2,29 @@ const { chromium } = require('playwright-core');
 
 const URL = process.argv[2] || 'https://padayon-theta.vercel.app/demo';
 
-function measure(chat) {
-  const main = chat.querySelector('main');
-  const scroll = chat.querySelector('[class*="overflow-y-auto"]');
-  const get = (el) =>
-    el
+function measure() {
+  const get = (sel) => {
+    const el = typeof sel === 'string' ? document.querySelector(sel) : sel;
+    return el
       ? {
           tag: el.tagName,
           class: el.className,
           rect: el.getBoundingClientRect().toJSON(),
           scrollH: el.scrollHeight,
           clientH: el.clientHeight,
+          computed: { height: window.getComputedStyle(el).height, maxHeight: window.getComputedStyle(el).maxHeight, minHeight: window.getComputedStyle(el).minHeight, overflow: window.getComputedStyle(el).overflow },
         }
       : null;
+  };
+  const chat = document.querySelector('[aria-label="PADAYON chat workspace"]');
   return {
+    main: get('main'),
+    grid: get('main > div.grid'),
+    chatPanel: get(chat?.parentElement),
     chat: get(chat),
-    main: get(main),
-    scroll: get(scroll),
-    body: { rect: document.body.getBoundingClientRect().toJSON(), scrollH: document.body.scrollHeight },
+    chatMain: get(chat?.querySelector('main')),
+    scroll: get(chat?.querySelector('[class*="overflow-y-auto"]')),
+    body: get(document.body),
   };
 }
 
@@ -29,15 +34,13 @@ function measure(chat) {
   await page.goto(URL);
   await page.waitForTimeout(6000);
 
-  const before = await page.evaluate(measure, await page.$('[aria-label="PADAYON chat workspace"]'));
+  const before = await page.evaluate(measure);
   console.log('BEFORE:', JSON.stringify(before, null, 2));
 
-  // Click first suggestion
   const suggestion = await page.locator('button', { hasText: 'Explain photosynthesis' }).first();
   if (await suggestion.count()) {
     await suggestion.click();
     console.log('Clicked suggestion, waiting for response...');
-    // Wait for request to finish (agent thinking disappears)
     await page.waitForFunction(() => {
       const chat = document.querySelector('[aria-label="PADAYON chat workspace"]');
       return chat && !chat.textContent.includes('PADAYON is thinking');
@@ -47,7 +50,7 @@ function measure(chat) {
     console.log('No suggestion found');
   }
 
-  const after = await page.evaluate(measure, await page.$('[aria-label="PADAYON chat workspace"]'));
+  const after = await page.evaluate(measure);
   console.log('AFTER:', JSON.stringify(after, null, 2));
 
   await page.screenshot({ path: 'C:/Users/Prince/AppData/Local/Temp/demo_after_chat.png' });
