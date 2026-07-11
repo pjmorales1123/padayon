@@ -83,6 +83,7 @@ async function main() {
   });
 
   let topicId = null;
+  const AGENT_REQUEST_ID = "smoke-req-photosynthesis";
 
   await test("Agent returns useful response for photosynthesis", async () => {
     const res = await fetchWithTimeout(`${BASE_URL}/api/agent`, {
@@ -90,12 +91,16 @@ async function main() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId: USER_ID,
+        requestId: AGENT_REQUEST_ID,
+        model: "auto",
         message: "photosynthesis chlorophyll sunlight CO2 oxygen glucose food important",
       }),
     });
     assert(res.ok, `status ${res.status}`);
     const data = await res.json();
     assert(data.reply, "missing reply");
+    assert(data.requestId === AGENT_REQUEST_ID, `requestId mismatch: ${data.requestId}`);
+    assert(data.model_runtime && data.model_runtime.provider === "fireworks", `runtime: ${JSON.stringify(data.model_runtime)}`);
     assert(data.classification, "missing classification");
     assert(data.classification.subject === "Science", `subject: ${data.classification.subject}`);
     assert(data.topic && data.topic.id, "missing topic");
@@ -104,6 +109,23 @@ async function main() {
       assert(data.materials_created.includes("quiz"), "quiz not created");
     }
     topicId = data.topic.id;
+  });
+
+  await test("Agent run endpoint reaches done finish event", async () => {
+    const deadline = Date.now() + 30000;
+    let run = null;
+    while (Date.now() < deadline) {
+      const res = await fetchWithTimeout(`${BASE_URL}/api/agent/run?requestId=${AGENT_REQUEST_ID}`);
+      if (res.ok) {
+        const data = await res.json();
+        run = data.run;
+        if (run && run.events && run.events.some((e) => e.step === "finish" && e.status === "done")) {
+          break;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    assert(run && run.events && run.events.some((e) => e.step === "finish" && e.status === "done"), "run did not reach finish done");
   });
 
   await test("Library returns organized folders", async () => {

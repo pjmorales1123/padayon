@@ -53,7 +53,7 @@ async function setProfile(userId, profile) {
 }
 
 async function chat(userId, message, quizResult) {
-  const body = { userId, message };
+  const body = { userId, message, model: "auto" };
   if (quizResult) body.quizResult = quizResult;
   const res = await fetchWithTimeout(`${BASE_URL}/api/agent`, {
     method: "POST",
@@ -170,6 +170,9 @@ const personas = [
 async function main() {
   console.log(`Running PADAYON persona tests against ${BASE_URL}\n`);
 
+  let passed = 0;
+  let failed = 0;
+
   for (const p of personas) {
     console.log(`--- ${p.label}: ${p.name} ---`);
     try {
@@ -182,10 +185,17 @@ async function main() {
       console.log("PADAYON:\n", data.reply);
       p.check(data.reply);
       console.log("✅ Checks passed\n");
+      passed++;
     } catch (err) {
       console.error(`❌ Failed: ${err.message}\n`);
+      failed++;
     }
   }
+
+  console.log("------------------------------");
+  console.log(`Passed: ${passed}`);
+  console.log(`Failed: ${failed}`);
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 main().catch((err) => {
