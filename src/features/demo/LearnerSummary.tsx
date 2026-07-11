@@ -1,0 +1,155 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+interface LearnerSummaryProps {
+  userId: string;
+  refreshKey: number;
+}
+
+interface ProfileData {
+  user?: { name?: string | null };
+  profile?: {
+    language_confidence?: Record<string, string> | null;
+    learning_style?: Record<string, boolean> | null;
+  } | null;
+}
+
+interface LibraryData {
+  subjects?: Array<{ topics?: unknown[] }> | null;
+}
+
+function SkeletonBlock({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-lg bg-slate-200 ${className}`} />;
+}
+
+export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryProps) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [library, setLibrary] = useState<LibraryData | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [profileRes, libraryRes] = await Promise.all([
+          fetch(`/api/profile?userId=${encodeURIComponent(userId)}`),
+          fetch(`/api/library?userId=${encodeURIComponent(userId)}`),
+        ]);
+
+        if (!profileRes.ok) {
+          const data = (await profileRes.json()) as { error?: string };
+          throw new Error(data.error || "Could not load profile");
+        }
+        if (!libraryRes.ok) {
+          const data = (await libraryRes.json()) as { error?: string };
+          throw new Error(data.error || "Could not load library");
+        }
+
+        const profileData = (await profileRes.json()) as ProfileData;
+        const libraryData = (await libraryRes.json()) as LibraryData;
+
+        if (!cancelled) {
+          setProfile(profileData);
+          setLibrary(libraryData);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Load failed");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, refreshKey, retryCount]);
+
+  if (loading) {
+    return (
+      <div className="h-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <SkeletonBlock className="mb-4 h-6 w-3/4" />
+        <SkeletonBlock className="mb-3 h-4 w-1/2" />
+        <SkeletonBlock className="mb-3 h-4 w-2/3" />
+        <SkeletonBlock className="h-4 w-1/3" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full flex-col justify-center rounded-2xl border border-red-200 bg-red-50 p-4 text-center">
+        <p className="text-sm font-medium text-red-800">{error}</p>
+        <button
+          onClick={() => setRetryCount((c) => c + 1)}
+          className="mt-3 inline-flex items-center justify-center rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const name = profile?.user?.name || userId;
+  const languageConfidence = profile?.profile?.language_confidence;
+  const language = languageConfidence
+    ? Object.entries(languageConfidence)
+        .map(([lang, level]) => `${lang}: ${level}`)
+        .join(", ")
+    : "Not set";
+
+  const learningStyleMap = profile?.profile?.learning_style;
+  const learningStyle = learningStyleMap
+    ? Object.entries(learningStyleMap)
+        .filter(([, enabled]) => enabled)
+        .map(([style]) => style.replace(/_/g, " "))
+        .join(", ") || "Not set"
+    : "Not set";
+
+  const topicCount =
+    library?.subjects?.reduce(
+      (sum, subject) => sum + (Array.isArray(subject.topics) ? subject.topics.length : 0),
+      0,
+    ) ?? 0;
+
+  const hasHistory = topicCount > 0;
+
+  return (
+    <div className="h-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-1 text-lg font-bold text-slate-900">{name}</h2>
+      <p className="mb-4 text-xs text-slate-500">Learner summary</p>
+
+      <dl className="space-y-3">
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Language</dt>
+          <dd className="text-sm text-slate-800">{language}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Learning style</dt>
+          <dd className="text-sm text-slate-800">{learningStyle}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Topics studied</dt>
+          <dd className="text-sm text-slate-800">{topicCount}</dd>
+        </div>
+      </dl>
+
+      {!hasHistory && (
+        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <p className="text-sm font-medium text-blue-900">No learning history yet.</p>
+          <p className="text-xs text-blue-700">Send a judge prompt to build the first study pack.</p>
+        </div>
+      )}
+    </div>
+  );
+}
