@@ -159,6 +159,11 @@ function computeMasteryUpdate(
   let incorrectCount = typeof p.incorrect === "number" ? p.incorrect : 0;
   let interactions = typeof p.interactions === "number" ? p.interactions : 0;
 
+  // Count a student correction about their own understanding as a learning interaction.
+  if (/not good at|not confident|don't understand|hindi ako magaling|hindi ko gets|dili ko kasabot|weak in|struggle with/i.test(message)) {
+    interactions++;
+  }
+
   interactions++;
 
   if (quizResult) {
@@ -336,10 +341,19 @@ async function applyMemoryUpdate(
     const newStrength = (memoryUpdate.strength_update || "").trim();
     const newWeakness = (memoryUpdate.weakness_update || "").trim();
 
+    // Parse explicit language confidence updates like "English: Low" or "Filipino: High".
+    const langUpdateMatch = (memoryUpdate.language_confidence_update || "").match(/([^:]+):\s*(Low|Medium|High|Developing)/i);
+    const languageUpdate: Record<string, string> = {};
+    if (langUpdateMatch) {
+      languageUpdate[langUpdateMatch[1].trim()] = langUpdateMatch[2].trim();
+    }
+
     const profileUpdate = {
       language_confidence: {
         ...(existingProfile?.language_confidence || {}),
-        [classification.language_detected]: "High",
+        ...(Object.keys(languageUpdate).length > 0
+          ? languageUpdate
+          : { [classification.language_detected]: "High" }),
       },
       learning_style: {
         ...(existingProfile?.learning_style || {}),

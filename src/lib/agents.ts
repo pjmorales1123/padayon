@@ -435,6 +435,12 @@ export async function memoryAgent(
 
 Update the learner profile based on the latest interaction.
 
+Rules:
+- If the student explicitly says they are NOT good at a language (e.g. "I am not good at English", "hindi ako magaling sa English"), set language_confidence_update to "English: Low" or the relevant language to "Low". Do not contradict the student.
+- If the student asks to switch languages (e.g. "explain in Filipino", "sa Cebuano ko sabta"), set language_confidence_update to reflect the requested language as the preferred one (e.g. "Filipino: High" or "Cebuano: High").
+- Only infer learning style, strengths, and weaknesses from this single message or the provided quiz result. Do not hallucinate.
+- If the student corrects an existing profile entry, update it.
+
 Return ONLY valid JSON with these exact string fields:
 - learning_style_update: string (one short phrase, e.g. "visuals, analogies")
 - language_confidence_update: string (one short phrase, e.g. "Cebuano: High")
@@ -443,8 +449,6 @@ Return ONLY valid JSON with these exact string fields:
 - next_recommended_action: string (specific next step for the student)
 
 All five values must be plain strings, not arrays or objects.
-
-Do not overstate. Only infer from the current interaction. If a quiz result is provided, use it to decide weakness/strength.
 
 Student message: "${message}"
 Quiz result: ${JSON.stringify(quizResult)}
