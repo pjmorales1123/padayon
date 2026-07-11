@@ -164,12 +164,12 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 p-4 [grid-template-columns:minmax(0,1fr)] md:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] lg:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-4 p-4 grid-rows-[minmax(0,1fr)] [grid-template-columns:minmax(0,1fr)] md:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] lg:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <div className={`${panelClass("profile")} md:col-span-2 lg:col-span-1 min-h-0 overflow-hidden`}>
           <LearnerSummary userId={userId} refreshKey={refreshKey} />
         </div>
 
-        <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden h-full`}>
+        <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden`}>
           <ChatWorkspace
             key={`${userId}-${promptKey}`}
             embedded
