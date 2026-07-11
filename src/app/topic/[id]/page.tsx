@@ -4,7 +4,6 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
-import AppNavigation from "@/components/navigation/AppNavigation";
 import { buildAppHref } from "@/lib/navigation";
 
 const DEMO_USER_ID = "demo-user-id";
@@ -507,7 +506,6 @@ function TopicPageInner() {
           </button>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <AppNavigation userId={userId} />
           <Link
             href={buildAppHref("/library", userId)}
             className="text-sm text-blue-600 hover:underline"

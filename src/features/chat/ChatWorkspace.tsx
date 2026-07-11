@@ -6,7 +6,6 @@ import Link from "next/link";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import InteractiveMessage from "@/components/chat/InteractiveMessage";
 import type { InteractivePayload, AgentResponseRuntime } from "@/lib/types";
-import AppNavigation from "@/components/navigation/AppNavigation";
 import { consumeRequestId } from "./request-id";
 
 interface ChatMessage {
@@ -79,7 +78,6 @@ export interface ChatWorkspaceProps {
   initialPrompt?: string;
   autoSend?: boolean;
   initialRequestId?: string;
-  embedded?: boolean;
   onRequestStart?: (requestId: string) => void;
   onRequestComplete?: (requestId: string) => void;
 }
@@ -90,7 +88,6 @@ export default function ChatWorkspace({
   initialPrompt = "",
   autoSend = false,
   initialRequestId,
-  embedded = false,
   onRequestStart,
   onRequestComplete,
 }: ChatWorkspaceProps) {
@@ -500,11 +497,7 @@ export default function ChatWorkspace({
 
   return (
     <section aria-label="PADAYON chat workspace">
-      {!embedded && (
-        <div className="max-w-3xl mx-auto px-4 pt-4">
-          <AppNavigation userId={userId} busy={busy} />
-        </div>
-      )}
+      
 
       <main className="max-w-3xl mx-auto px-4 py-4 flex flex-col h-[calc(100vh-2rem)]">
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
@@ -565,14 +558,6 @@ export default function ChatWorkspace({
               <option value="auto">Auto (DeepSeek/Kimi)</option>
               <option value="gemma-4">Gemma 4 (demo only — paid)</option>
             </select>
-            {!embedded && (
-              <Link
-                href="/"
-                className="inline-flex items-center justify-center rounded-xl bg-blue-600 text-white px-3 py-2 text-sm font-medium hover:bg-blue-700 transition"
-              >
-                Home
-              </Link>
-            )}
           </div>
         </header>
 

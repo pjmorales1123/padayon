@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import AppNavigation from "@/components/navigation/AppNavigation";
 import { buildAppHref } from "@/lib/navigation";
 
 const DEMO_USER_ID = "demo-user-id";
@@ -184,7 +183,6 @@ function LibraryInner() {
     <main className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Library</h1>
-        <AppNavigation userId={userId} />
       </div>
 
       {operationError && (
@@ -238,10 +236,10 @@ function LibraryInner() {
       )}
 
       {!loading && !error && (
-        <div className="grid gap-4">
+        <div className="grid gap-5">
           {filteredSubjects.map((subject) => (
-            <div key={subject.id} className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-              <div className="flex items-center justify-between p-4 bg-slate-50 border-b border-slate-200">
+            <div key={subject.id} className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between gap-3 p-4 bg-slate-50 border-b border-slate-200">
                 <button
                   onClick={() => toggle(subject.id)}
                   className="flex items-center gap-2 text-left min-w-0"
@@ -257,24 +255,26 @@ function LibraryInner() {
                       className="rounded border border-slate-300 px-2 py-1 text-slate-900"
                     />
                   ) : (
-                    <span className="font-bold text-slate-800 truncate">{subject.name}</span>
+                    <span className="font-semibold text-slate-800 truncate">{subject.name}</span>
                   )}
-                  <span className="text-xs text-slate-500 shrink-0">({(subject.topics || []).length})</span>
+                  <span className="text-xs text-slate-500 shrink-0">{(subject.topics || []).length}</span>
                 </button>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <button
                     onClick={() => {
                       setEditingId(subject.id);
                       setEditingName(subject.name);
                     }}
-                    className="text-xs text-slate-500 hover:text-blue-600"
+                    className="text-xs font-medium text-slate-500 hover:text-blue-600"
+                    title="Rename folder"
                   >
                     Rename
                   </button>
                   <button
                     onClick={() => deleteSubject(subject.id, subject.name)}
-                    className="text-xs text-red-500 hover:text-red-700"
+                    className="text-xs font-medium text-red-500 hover:text-red-700"
+                    title="Delete folder"
                   >
                     Delete
                   </button>
@@ -282,65 +282,61 @@ function LibraryInner() {
               </div>
 
               {expanded[subject.id] && (
-                <div className="p-4 space-y-3">
+                <div className="divide-y divide-slate-100">
                   {(subject.topics || []).length === 0 && (
-                    <p className="text-sm text-slate-400">No topics yet. Start studying in chat.</p>
+                    <p className="p-4 text-sm text-slate-400">No topics yet. Start studying in chat.</p>
                   )}
                   {(subject.topics || []).map((topic) => {
                     const confidence = topic.progress?.confidence ?? 0;
                     const status = topic.progress?.status || "started";
-                    const statusColor =
+                    const statusClasses =
+                      status === "mastered"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : status === "developing"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-blue-50 text-blue-700 border-blue-200";
+                    const barColor =
                       status === "mastered" ? "bg-emerald-500" : status === "developing" ? "bg-amber-500" : "bg-blue-500";
                     return (
-                    <div
-                      key={topic.id}
-                      className="flex items-start justify-between rounded-xl border border-slate-100 bg-slate-50 p-3"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Link
-                            href={buildAppHref(`/topic/${topic.id}`, userId)}
-                            className="font-semibold text-slate-800 hover:text-blue-600 truncate"
-                          >
-                            {topic.subcategory ? `${topic.subcategory} → ` : ""}
-                            {topic.title}
-                          </Link>
-                          <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 border border-slate-200">
-                            {status}
-                          </span>
-                        </div>
-                        <div className="mt-2">
-                          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                            <span>Mastery {confidence}%</span>
-                            <span>{topic.progress?.correct ?? 0}/{topic.progress?.attempts ?? 0} correct</span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
-                            <div
-                              className={`h-full ${statusColor} transition-all`}
-                              style={{ width: `${confidence}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="ml-4 mt-2 flex flex-wrap gap-2">
-                          {(topic.materials || []).map((m) => (
-                            <Link
-                              key={m.id}
-                              href={buildAppHref(`/topic/${topic.id}`, userId)}
-                              className="inline-block rounded-lg bg-white px-3 py-1 text-sm text-slate-600 border border-slate-200 hover:bg-slate-100 transition"
-                            >
-                              {m.title}
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => deleteTopic(topic.id, topic.title)}
-                        className="text-xs text-red-500 hover:text-red-700 ml-2 shrink-0"
+                      <div
+                        key={topic.id}
+                        className="group flex items-center justify-between gap-4 p-4 hover:bg-slate-50 transition"
                       >
-                        Delete
-                      </button>
-                    </div>
-                  ); })}
+                        <Link
+                          href={buildAppHref(`/topic/${topic.id}`, userId)}
+                          className="min-w-0 flex-1"
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-slate-800 group-hover:text-blue-600 truncate">
+                              {topic.title}
+                            </span>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusClasses}`}>
+                              {status}
+                            </span>
+                          </div>
+                          {topic.subcategory && (
+                            <p className="text-xs text-slate-500 truncate">{topic.subcategory}</p>
+                          )}
+                          <div className="mt-2 flex items-center gap-3">
+                            <div className="h-1.5 flex-1 max-w-[10rem] rounded-full bg-slate-200 overflow-hidden">
+                              <div
+                                className={`h-full ${barColor} transition-all`}
+                                style={{ width: `${confidence}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-slate-500">{confidence}%</span>
+                          </div>
+                        </Link>
+                        <button
+                          onClick={() => deleteTopic(topic.id, topic.title)}
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-xs font-medium text-red-500 hover:text-red-700 shrink-0 transition"
+                          title="Delete topic"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

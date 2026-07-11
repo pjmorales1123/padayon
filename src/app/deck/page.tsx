@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Home } from "lucide-react";
+import { House } from "lucide-react";
 import { buildAppHref } from "@/lib/navigation";
 
 const SLIDES = [
@@ -241,7 +241,7 @@ function DeckInner() {
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
           aria-label="Home"
         >
-          <Home className="h-4 w-4" />
+          <House className="h-4 w-4" />
           <span className="hidden sm:inline">Home</span>
         </Link>
       </div>

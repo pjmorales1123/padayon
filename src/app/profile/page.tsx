@@ -2,7 +2,6 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import AppNavigation from "@/components/navigation/AppNavigation";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -119,7 +118,6 @@ function ProfileInner() {
         <h1 className="text-2xl font-bold text-slate-900">
           {displayName}&apos;s Learning Profile
         </h1>
-        <AppNavigation userId={userId} />
       </div>
 
       {saveError && (

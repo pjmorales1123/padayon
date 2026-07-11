@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import AppNavigation from "@/components/navigation/AppNavigation";
+import Link from "next/link";
 import ChatWorkspace from "@/features/chat/ChatWorkspace";
 import { buildAppHref } from "@/lib/navigation";
 import AgentTrail from "./AgentTrail";
@@ -100,33 +100,35 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="hidden sm:block">
-            <AppNavigation userId={userId} busy={!!activeRequestId} />
-          </div>
-
-          <label htmlFor="persona-select" className="sr-only">
-            Learner persona
-          </label>
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <select
-            id="persona-select"
+            aria-label="Persona"
             value={userId}
             onChange={(e) => handlePersonaChange(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[10rem] truncate"
+            disabled={activeRequestId !== null}
+            className="text-sm rounded-xl border border-slate-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 max-w-[9rem] sm:max-w-none truncate"
+            title="Choose a demo persona"
           >
             {DEMO_PERSONAS.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} — {p.label}
+                {p.name} · {p.label}
               </option>
             ))}
           </select>
-
+          <Link
+            href={buildAppHref("/profile", userId)}
+            className="hidden sm:inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            title="View this persona's profile"
+          >
+            Profile
+          </Link>
           <button
             onClick={handleReset}
-            disabled={resetState === "working"}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            disabled={resetState === "working" || activeRequestId !== null}
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            title="Reset demo personas"
           >
-            {resetState === "working" ? "Resetting..." : "Reset personas"}
+            {resetState === "working" ? "Resetting..." : "Reset"}
           </button>
         </div>
       </header>
@@ -171,7 +173,6 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
           <div className="flex-1 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <ChatWorkspace
               key={`${userId}-${promptKey}`}
-              embedded
               initialModel="auto"
               userId={userId}
               initialPrompt={initialPrompt}
