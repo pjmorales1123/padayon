@@ -169,20 +169,18 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
           <LearnerSummary userId={userId} refreshKey={refreshKey} />
         </div>
 
-        <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden relative`}>
-          <div className="absolute inset-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <ChatWorkspace
-              key={`${userId}-${promptKey}`}
-              embedded
-              initialModel="auto"
-              userId={userId}
-              initialPrompt={initialPrompt}
-              autoSend={autoSend}
-              initialRequestId={activeRequestId ?? undefined}
-              onRequestStart={setActiveRequestId}
-              onRequestComplete={setActiveRequestId}
-            />
-          </div>
+        <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden h-full`}>
+          <ChatWorkspace
+            key={`${userId}-${promptKey}`}
+            embedded
+            initialModel="auto"
+            userId={userId}
+            initialPrompt={initialPrompt}
+            autoSend={autoSend}
+            initialRequestId={activeRequestId ?? undefined}
+            onRequestStart={setActiveRequestId}
+            onRequestComplete={setActiveRequestId}
+          />
 
           <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">

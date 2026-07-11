@@ -538,7 +538,7 @@ export default function ChatWorkspace({
   const runtimeClass = runtimeBadgeClass(lastRuntime);
 
   return (
-    <section aria-label="PADAYON chat workspace" className="flex flex-col h-full min-h-0 overflow-hidden">
+    <section aria-label="PADAYON chat workspace" className={`flex flex-col min-h-0 overflow-hidden ${embedded ? "flex-1" : "h-full"}`}>
       <main className="w-full h-full px-4 py-4 flex flex-col min-h-0 overflow-hidden">
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
           <div className="min-w-0">
