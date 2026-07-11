@@ -217,7 +217,12 @@ export default function ChatWorkspace({
     });
   }
 
-  const send = useCallback(async (textOverride?: string, imageUrlOverride?: string, skipUserMessage = false) => {
+  const send = useCallback(async (
+    textOverride?: string,
+    imageUrlOverride?: string,
+    skipUserMessage = false,
+    attachmentType?: "image" | "pdf",
+  ) => {
     const userMsg = (textOverride ?? inputRef.current).trim();
     if (!userMsg || sendingRef.current) return;
     sendingRef.current = true;
@@ -258,7 +263,7 @@ export default function ChatWorkspace({
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, message: userMsg, requestId: reqId, imageUrl: imageUrlOverride, model }),
+        body: JSON.stringify({ userId, message: userMsg, requestId: reqId, imageUrl: imageUrlOverride, attachmentType, model }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -419,7 +424,7 @@ export default function ChatWorkspace({
         { role: "user", content: `${importLabel}\n${summary}${combinedText.length > 140 ? "..." : ""}`, imageUrl: previewUrl },
       ]);
 
-      send(combinedText, previewUrl, true);
+      send(combinedText, previewUrl, true, pdfFiles.length > 0 ? "pdf" : "image");
     } catch (err) {
       console.error("Smart import failed", err);
       showAssistantError("Import failed. Please try again with fewer or clearer pages.");
@@ -445,7 +450,7 @@ export default function ChatWorkspace({
         ...prev,
         { role: "user", content: `[Uploaded image]\n${text}`, imageUrl: dataUrl },
       ]);
-      send(text, undefined, true);
+      send(text, dataUrl, true, "image");
     } catch (err) {
       console.error("Image upload failed", err);
       showAssistantError("Could not read the image. Try typing the notes instead.");

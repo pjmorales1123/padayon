@@ -400,7 +400,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, model } = body;
+    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, attachmentType, model } = body;
     const preferredModel = model === "gemma-3" || model === "gemma-4" ? model : "auto";
 
     if (!userId || !message) {
@@ -684,7 +684,6 @@ export async function POST(req: NextRequest) {
         { topic_id: topic.id, type: "quiz", title: "Quiz", content: { quiz: studyPack.quiz } },
         { topic_id: topic.id, type: "summary", title: "Summary", content: { text: studyPack.summary } },
         ...(studyPack.story ? [{ topic_id: topic.id, type: "story", title: "Story", content: { text: studyPack.story } }] : []),
-        ...(imageUrl ? [{ topic_id: topic.id, type: "image_notes", title: "Uploaded Image", content: { image_url: imageUrl } }] : []),
       ];
 
       const { data: existingMaterials } = await supabaseAdmin!
@@ -732,6 +731,52 @@ export async function POST(req: NextRequest) {
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz\n✓ Summary${studyPack.story ? "\n✓ Story" : ""}`;
+      }
+    }
+
+    if (imageUrl) {
+      const uploadMaterialType = attachmentType === "pdf" ? "pdf_notes" : "image_notes";
+      const uploadMaterialTitle = attachmentType === "pdf" ? "Uploaded PDF" : "Uploaded Image";
+      const uploadMaterialContent =
+        attachmentType === "pdf"
+          ? { preview_image_url: imageUrl }
+          : { image_url: imageUrl };
+
+      const { data: existingUploadMaterial } = await supabaseAdmin!
+        .from("materials")
+        .select("id, type")
+        .eq("topic_id", topic.id)
+        .eq("type", uploadMaterialType)
+        .maybeSingle();
+
+      if (existingUploadMaterial?.id) {
+        const { error } = await supabaseAdmin!
+          .from("materials")
+          .update({ title: uploadMaterialTitle, content: uploadMaterialContent })
+          .eq("id", existingUploadMaterial.id);
+
+        if (error) {
+          console.error("Upload material update error:", error);
+        } else {
+          savedMaterials = savedMaterials.filter((material) => material.type !== uploadMaterialType);
+          savedMaterials.push({ type: uploadMaterialType, id: existingUploadMaterial.id });
+        }
+      } else {
+        const { data: insertedUploadMaterial, error } = await supabaseAdmin!
+          .from("materials")
+          .insert({ topic_id: topic.id, type: uploadMaterialType, title: uploadMaterialTitle, content: uploadMaterialContent })
+          .select("id, type")
+          .single();
+
+        if (error) {
+          console.error("Upload material insert error:", error);
+        } else if (insertedUploadMaterial) {
+          savedMaterials.push({ type: insertedUploadMaterial.type, id: insertedUploadMaterial.id });
+        }
+      }
+
+      if (!materials_created.includes(uploadMaterialType)) {
+        materials_created.push(uploadMaterialType);
       }
     }
 
