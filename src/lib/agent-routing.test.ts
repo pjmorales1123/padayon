@@ -29,6 +29,17 @@ describe("agent routing", () => {
     ).toBe(true);
   });
 
+  it("promotes a topic when the classifier uses a close variant of the earlier wording", () => {
+    expect(
+      shouldPersistTopicForTurn({
+        intent: "teach_topic",
+        topic: "Poetic Meter",
+        hasUpload: false,
+        history: [{ role: "user", content: "What is meter in poetry?" }],
+      })
+    ).toBe(true);
+  });
+
   it("persists uploaded materials immediately", () => {
     expect(
       shouldPersistTopicForTurn({

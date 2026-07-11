@@ -26,11 +26,13 @@ function hasPriorUserTopicMention(topic: string, history: ChatMessage[]) {
   if (!normalizedTopic) return false;
 
   const topicWords = normalizedTopic.split(" ").filter((word) => word.length > 2);
+  const distinctiveTopicWords = topicWords.filter((word) => word.length >= 5);
   return history.some((message) => {
     if (message.role !== "user") return false;
     const content = normalizeText(message.content);
     if (content.includes(normalizedTopic)) return true;
-    return topicWords.length > 1 && topicWords.every((word) => content.includes(word));
+    if (topicWords.length > 1 && topicWords.every((word) => content.includes(word))) return true;
+    return distinctiveTopicWords.some((word) => content.includes(word));
   });
 }
 
