@@ -172,68 +172,48 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
 
   const hasHistory = topicCount > 0 || recentActivity.length > 0;
 
-  const recentTopics = allTopics
-    .sort((a, b) => new Date(b.last_studied_at || 0).getTime() - new Date(a.last_studied_at || 0).getTime())
-    .slice(0, 5);
-
   return (
     <div className="h-full min-h-0 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-4 text-lg font-bold text-slate-900">{name}</h2>
+      <h2 className="mb-1 text-lg font-bold text-slate-900">{name}</h2>
+      <p className="mb-4 text-xs text-slate-500">Learner summary</p>
 
-      {profile?.profile?.strengths && profile.profile.strengths.length > 0 && (
-        <div className="mb-5">
-          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Strengths</h3>
-          <ul className="space-y-1.5">
-            {profile.profile.strengths.map((s, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
-                <span className="text-blue-500 mt-0.5">•</span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ul>
+      <dl className="space-y-3">
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Language</dt>
+          <dd className="text-sm text-slate-800">{language}</dd>
         </div>
-      )}
-
-      {profile?.profile?.weaknesses && profile.profile.weaknesses.length > 0 && (
-        <div className="mb-5">
-          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Growth areas</h3>
-          <ul className="space-y-1.5">
-            {profile.profile.weaknesses.map((w, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
-                <span className="text-amber-500 mt-0.5">•</span>
-                <span>{w}</span>
-              </li>
-            ))}
-          </ul>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Learning style</dt>
+          <dd className="text-sm text-slate-800">{learningStyle}</dd>
         </div>
-      )}
-
-      {recentTopics.length > 0 && (
-        <div className="mb-5">
-          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Recent topics</h3>
-          <div className="space-y-2">
-            {recentTopics.map((t) => {
-              const confidence = typeof t.progress?.confidence === "number" ? t.progress.confidence : 0;
-              const status = (t.progress?.status as string) || "started";
-              return (
-                <div key={t.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-0.5">
-                    {t.subjectName}
-                  </div>
-                  <div className="text-sm font-semibold text-slate-900 truncate">{t.title}</div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 rounded-full"
-                        style={{ width: `${Math.max(5, Math.min(100, confidence))}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] font-medium text-slate-500 capitalize">{status}</span>
-                  </div>
-                </div>
-              );
-            })}
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Topics studied</dt>
+          <dd className="text-sm text-slate-800">{topicCount}</dd>
+        </div>
+        {profile?.profile?.strengths && profile.profile.strengths.length > 0 && (
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Strengths</dt>
+            <dd className="text-sm text-slate-800">{profile.profile.strengths.join(", ")}</dd>
           </div>
+        )}
+        {profile?.profile?.weaknesses && profile.profile.weaknesses.length > 0 && (
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Growth areas</dt>
+            <dd className="text-sm text-slate-800">{profile.profile.weaknesses.join(", ")}</dd>
+          </div>
+        )}
+      </dl>
+
+      {recentActivity.length > 0 && (
+        <div className="mt-5">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Recent activity</h3>
+          <ul className="space-y-2">
+            {recentActivity.map((a, i) => (
+              <li key={i} className="text-xs text-slate-700 border-l-2 border-blue-200 pl-2">
+                {a.text}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
