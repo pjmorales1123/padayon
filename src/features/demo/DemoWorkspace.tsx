@@ -169,8 +169,8 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
           <LearnerSummary userId={userId} refreshKey={refreshKey} />
         </div>
 
-        <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3`}>
-          <div className="flex-1 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden`}>
+          <div className="flex-1 min-h-0 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <ChatWorkspace
               key={`${userId}-${promptKey}`}
               embedded

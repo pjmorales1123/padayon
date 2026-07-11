@@ -166,11 +166,9 @@ export default function ChatWorkspace({
     const container = scrollContainerRef.current;
     const el = bottomRef.current;
     if (!container || !el) return;
-    const isFirstMount = messages.length <= 1;
-    container.scrollTop = container.scrollHeight;
-    if (!isFirstMount) {
-      el.scrollIntoView({ behavior: "smooth" });
-    }
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: messages.length > 2 ? "smooth" : "auto", block: "end" });
+    });
   }, [messages, stepLabel, requestState]);
 
   function clearSlowTimer() {
@@ -528,7 +526,7 @@ export default function ChatWorkspace({
   const runtimeClass = runtimeBadgeClass(lastRuntime);
 
   return (
-    <section aria-label="PADAYON chat workspace" className={`flex flex-col h-full min-h-0 ${embedded ? "h-full" : ""}`}>
+    <section aria-label="PADAYON chat workspace" className="flex flex-col h-full min-h-0">
       <main className={`max-w-3xl mx-auto w-full px-4 py-4 flex flex-col min-h-0 ${embedded ? "h-full" : "h-[calc(100vh-4rem)]"}`}>
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
           <div className="min-w-0">
@@ -591,7 +589,7 @@ export default function ChatWorkspace({
           </div>
         </header>
 
-        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto space-y-4 mb-4 scroll-smooth">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-scroll space-y-4 mb-4 scroll-smooth">
           {messages.length === 0 && (
             <div className="text-center mt-10">
               {initialPrompt && (
