@@ -59,6 +59,13 @@ interface ActiveTopic {
   subjectName: string;
 }
 
+function summarizeNotes(text: string, maxLength = 160): string {
+  if (!text) return "";
+  const firstSentence = text.split(/[.!?]\s+/)[0].trim();
+  if (firstSentence.length > 0 && firstSentence.length <= maxLength) return firstSentence;
+  return text.slice(0, maxLength).trim() + (text.length > maxLength ? "..." : "");
+}
+
 async function getLastActiveTopic(userId: string): Promise<ActiveTopic | null> {
   const { data: rows, error } = await supabaseAdmin!
     .from("topics")
@@ -902,6 +909,14 @@ export async function POST(req: NextRequest) {
       if (!reply || reply.length < 10) {
         reply = `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;
       }
+    }
+
+    // Uploaded notes/pictures: reply with a clean summary instead of raw transcription or a generic ack.
+    if (imageUrl && topic) {
+      const summary = summarizeNotes(studyPack?.clean_notes || message);
+      reply = summary
+        ? `Got your notes! I extracted and saved: "${summary}". They're now in your study pack under **${classification.subject} → ${classification.subcategory} → ${classification.topic}**. Want me to make flashcards, a quiz, or a review sheet?`
+        : `Got your notes! I've saved them to your study pack under **${classification.subject} → ${classification.subcategory} → ${classification.topic}**. Want me to make flashcards, a quiz, or a review sheet?`;
     }
 
     // Visual requests: ensure the HTML widget is generated even if we only taught or had existing materials.
