@@ -539,7 +539,7 @@ export default function ChatWorkspace({
 
   return (
     <section aria-label="PADAYON chat workspace" className="flex flex-col h-full min-h-0 overflow-hidden">
-      <main className="w-full h-full px-4 py-4 flex flex-col min-h-0 overflow-hidden" style={{ contain: "strict" }}>
+      <main className="w-full h-full px-4 py-4 flex flex-col min-h-0 overflow-hidden">
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
