@@ -165,7 +165,7 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 p-4 [grid-template-columns:minmax(0,1fr)] md:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] lg:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-        <div className={`${panelClass("profile")} md:col-span-2 lg:col-span-1`}>
+        <div className={`${panelClass("profile")} md:col-span-2 lg:col-span-1 min-h-0 overflow-hidden`}>
           <LearnerSummary userId={userId} refreshKey={refreshKey} />
         </div>
 
@@ -203,7 +203,7 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
           </div>
         </div>
 
-        <div className={`${panelClass("agents")} min-w-0`}>
+        <div className={`${panelClass("agents")} min-h-0 overflow-hidden`}>
           <AgentTrail requestId={activeRequestId} />
         </div>
       </div>

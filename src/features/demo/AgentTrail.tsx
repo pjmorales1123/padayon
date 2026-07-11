@@ -188,7 +188,7 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-slate-100">
-      <div className="border-b border-slate-800 bg-slate-900 p-4">
+      <div className="shrink-0 border-b border-slate-800 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold truncate">Backend Agents Monitor</h2>
           <span className="rounded-full bg-green-900 px-2 py-1 text-xs font-medium text-green-300 shrink-0">
@@ -212,7 +212,7 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 min-w-0">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 min-w-0">
         {showRetry && (
           <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-950/40 p-3">
             <p className="text-xs text-amber-200">

@@ -12,11 +12,29 @@ interface ProfileData {
   profile?: {
     language_confidence?: Record<string, string> | null;
     learning_style?: Record<string, boolean> | null;
+    strengths?: string[] | null;
+    weaknesses?: string[] | null;
+    updated_at?: string | null;
   } | null;
 }
 
+interface Topic {
+  id: string;
+  title: string;
+  subcategory: string | null;
+  progress?: Record<string, unknown> | null;
+  last_studied_at?: string | null;
+  materials?: Array<{ type: string; title: string; created_at?: string | null }> | null;
+}
+
+interface Subject {
+  id: string;
+  name: string;
+  topics?: Topic[] | null;
+}
+
 interface LibraryData {
-  subjects?: Array<{ topics?: unknown[] }> | null;
+  subjects?: Subject[] | null;
 }
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
@@ -116,16 +134,35 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
         .join(", ") || "Not set"
     : "Not set";
 
-  const topicCount =
-    library?.subjects?.reduce(
-      (sum, subject) => sum + (Array.isArray(subject.topics) ? subject.topics.length : 0),
-      0,
-    ) ?? 0;
+  const allTopics = (library?.subjects || []).flatMap((s) => (s.topics || []).map((t) => ({ ...t, subjectName: s.name })));
+  const topicCount = allTopics.length;
 
-  const hasHistory = topicCount > 0;
+  const recentActivity = allTopics
+    .flatMap((t) => {
+      const events: Array<{ ts: string; text: string }> = [];
+      if (t.last_studied_at) {
+        const confidence = typeof t.progress?.confidence === "number" ? t.progress.confidence : 0;
+        const status = (t.progress?.status as string) || "started";
+        events.push({
+          ts: t.last_studied_at,
+          text: `Studied ${t.subjectName} → ${t.subcategory || "General"} → ${t.title} · ${confidence}% ${status}`,
+        });
+      }
+      (t.materials || []).forEach((m) => {
+        events.push({
+          ts: m.created_at || t.last_studied_at || new Date().toISOString(),
+          text: `Saved ${m.type.replace(/_/g, " ")} for ${t.title}`,
+        });
+      });
+      return events;
+    })
+    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+    .slice(0, 10);
+
+  const hasHistory = topicCount > 0 || recentActivity.length > 0;
 
   return (
-    <div className="h-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="h-full min-h-0 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-1 text-lg font-bold text-slate-900">{name}</h2>
       <p className="mb-4 text-xs text-slate-500">Learner summary</p>
 
@@ -142,7 +179,32 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Topics studied</dt>
           <dd className="text-sm text-slate-800">{topicCount}</dd>
         </div>
+        {profile?.profile?.strengths && profile.profile.strengths.length > 0 && (
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Strengths</dt>
+            <dd className="text-sm text-slate-800">{profile.profile.strengths.join(", ")}</dd>
+          </div>
+        )}
+        {profile?.profile?.weaknesses && profile.profile.weaknesses.length > 0 && (
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Growth areas</dt>
+            <dd className="text-sm text-slate-800">{profile.profile.weaknesses.join(", ")}</dd>
+          </div>
+        )}
       </dl>
+
+      {recentActivity.length > 0 && (
+        <div className="mt-5">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Recent activity</h3>
+          <ul className="space-y-2">
+            {recentActivity.map((a, i) => (
+              <li key={i} className="text-xs text-slate-700 border-l-2 border-blue-200 pl-2">
+                {a.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {!hasHistory && (
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
