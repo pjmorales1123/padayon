@@ -30,6 +30,7 @@ export default function Home() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [seeding, setSeeding] = useState(false);
+  const [seedingPersonas, setSeedingPersonas] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
 
   const loadData = () => {
@@ -85,6 +86,19 @@ export default function Home() {
       setSeedResult("Seed failed. Make sure the migration has been run.");
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const seedPersonas = async () => {
+    setSeedingPersonas(true);
+    try {
+      await fetch("/api/seed-personas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true }),
+      });
+    } finally {
+      setSeedingPersonas(false);
     }
   };
 
@@ -158,6 +172,51 @@ export default function Home() {
               <p className="text-sm text-slate-600">{f.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Demo personas */}
+      <section className="max-w-5xl mx-auto px-4 pb-10">
+        <div className="rounded-3xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white p-6 sm:p-10 shadow-lg">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold mb-1">Demo personas</h2>
+              <p className="text-blue-100 text-sm">
+                See how PADAYON adapts when it already knows the student.
+              </p>
+            </div>
+            <button
+              onClick={seedPersonas}
+              disabled={seedingPersonas}
+              className="rounded-xl bg-white/10 hover:bg-white/20 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 transition"
+            >
+              {seedingPersonas ? "Preparing..." : "Reset personas"}
+            </button>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { id: "demo-new-student", name: "Maria", tag: "Brand new", desc: "No history. PADAYON starts fresh and explains in simple terms.", color: "bg-white/10" },
+              { id: "demo-bisaya-learner", name: "Juan", tag: "Cebuano-first", desc: "Strong in Cebuano, growing in English. Already studied Photosynthesis.", color: "bg-amber-400/20" },
+              { id: "demo-english-advanced", name: "Alex", tag: "Advanced", desc: "High English confidence. Already studied Irony, ready for deeper analysis.", color: "bg-emerald-400/20" },
+              { id: "demo-struggling-student", name: "Bea", tag: "Needs support", desc: "Gets discouraged easily. Already tried Quadratic Equations once.", color: "bg-rose-400/20" },
+            ].map((p) => (
+              <Link
+                key={p.id}
+                href={`/demo?userId=${p.id}`}
+                className={`block rounded-2xl ${p.color} border border-white/10 p-4 hover:bg-white/20 transition`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">👤</span>
+                  <span className="font-bold">{p.name}</span>
+                </div>
+                <span className="inline-block rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium mb-2">
+                  {p.tag}
+                </span>
+                <p className="text-xs text-blue-50 leading-relaxed">{p.desc}</p>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 

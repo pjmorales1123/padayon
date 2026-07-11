@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-const DEMO_USER_ID = "demo-user-id";
+const DEFAULT_DEMO_USER_ID = "demo-user-id";
 
 interface AgentEvent {
   id: string;
@@ -276,6 +276,7 @@ const DEMO_PROMPTS = [
 function DemoInner() {
   const searchParams = useSearchParams();
   const requestedRequestId = searchParams?.get("requestId");
+  const requestedUserId = searchParams?.get("userId") || DEFAULT_DEMO_USER_ID;
   const [requestId, setRequestId] = useState(
     () => requestedRequestId || `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
@@ -335,7 +336,7 @@ function DemoInner() {
             <iframe
               key={requestId}
               title="PADAYON Chat"
-              src={`/chat?userId=${DEMO_USER_ID}&requestId=${requestId}${demoModel ? `&model=${encodeURIComponent(demoModel)}` : ""}${demoPrompt ? `&prompt=${encodeURIComponent(demoPrompt)}` : ""}${autoSend ? "&autoSend=1" : ""}`}
+              src={`/chat?userId=${encodeURIComponent(requestedUserId)}&requestId=${requestId}${demoModel ? `&model=${encodeURIComponent(demoModel)}` : ""}${demoPrompt ? `&prompt=${encodeURIComponent(demoPrompt)}` : ""}${autoSend ? "&autoSend=1" : ""}`}
               className="w-full h-full"
             />
           </div>
@@ -347,7 +348,7 @@ function DemoInner() {
               {DEMO_PROMPTS.map((p) => (
                 <a
                   key={p}
-                  href={`/chat?userId=${DEMO_USER_ID}&requestId=${requestId}&prompt=${encodeURIComponent(p)}`}
+                  href={`/chat?userId=${encodeURIComponent(requestedUserId)}&requestId=${requestId}&prompt=${encodeURIComponent(p)}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-xs rounded-full bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 px-3 py-1.5 border border-slate-200 transition"

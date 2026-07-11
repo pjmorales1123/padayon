@@ -44,6 +44,7 @@ function ChatInner() {
   const [stepLabel, setStepLabel] = useState("Thinking...");
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number; label: string } | null>(null);
   const initialModelParam = searchParams?.get("model") as "auto" | "gemma-4" | null;
   const initialModel = ["auto", "gemma-4"].includes(initialModelParam || "") ? (initialModelParam as "auto" | "gemma-4") : "auto";
   const [model, setModel] = useState<"auto" | "gemma-4">(initialModel);
@@ -75,7 +76,7 @@ function ChatInner() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, stepLabel]);
+  }, [messages, stepLabel, importProgress]);
 
   function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -162,38 +163,141 @@ function ChatInner() {
     }
   };
 
+  async function ocrImageDataUrl(dataUrl: string): Promise<string> {
+    const formData = new FormData();
+    formData.append("userId", userId);
+    formData.append("image", dataUrl);
+    const uploadRes = await fetch("/api/agent/upload", { method: "POST", body: formData });
+    const uploadData = await uploadRes.json();
+    if (!uploadRes.ok || !uploadData.extractedText) {
+      throw new Error(uploadData.error || "Could not read image");
+    }
+    return uploadData.extractedText;
+  }
+
+  async function renderPdfPagesToImages(file: File): Promise<string[]> {
+    const pdfjs = await import("pdfjs-dist");
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    const images: string[] = [];
+    const maxPages = Math.min(pdf.numPages, 6);
+
+    for (let i = 1; i <= maxPages; i++) {
+      setImportProgress({ current: i, total: maxPages, label: `Rendering PDF page ${i}/${maxPages}...` });
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+      images.push(canvas.toDataURL("image/jpeg", 0.75));
+    }
+
+    return images;
+  }
+
+  async function smartImportFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    const imageFiles = fileArray.filter((f) => f.type.startsWith("image/"));
+    const pdfFiles = fileArray.filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+
+    if (imageFiles.length === 0 && pdfFiles.length === 0) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Please upload images or PDF files." }]);
+      return;
+    }
+
+    setUploading(true);
+    setImportProgress({ current: 0, total: imageFiles.length + pdfFiles.length * 3, label: "Preparing your notes..." });
+
+    try {
+      const allDataUrls: string[] = [];
+
+      // Compress images
+      for (let i = 0; i < imageFiles.length; i++) {
+        setImportProgress({ current: i + 1, total: fileArray.length, label: `Compressing image ${i + 1}/${imageFiles.length}...` });
+        const dataUrl = await compressImage(imageFiles[i], 1200, 0.7);
+        allDataUrls.push(dataUrl);
+      }
+
+      // Render PDF pages to images
+      for (const pdfFile of pdfFiles) {
+        const pageImages = await renderPdfPagesToImages(pdfFile);
+        allDataUrls.push(...pageImages);
+      }
+
+      if (allDataUrls.length === 0) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Could not process any pages. Try clearer images or a text-based PDF." }]);
+        return;
+      }
+
+      // OCR each image
+      const extractedParts: string[] = [];
+      for (let i = 0; i < allDataUrls.length; i++) {
+        setImportProgress({ current: i + 1, total: allDataUrls.length, label: `Reading page ${i + 1}/${allDataUrls.length}...` });
+        try {
+          const text = await ocrImageDataUrl(allDataUrls[i]);
+          if (text.trim().length > 5) extractedParts.push(text.trim());
+        } catch (err) {
+          console.warn("OCR failed for page", i, err);
+        }
+      }
+
+      setImportProgress(null);
+      setImagePreview(null);
+
+      const combinedText = extractedParts.join("\n\n---\n\n").trim();
+      if (!combinedText || combinedText.length < 20) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Could not read enough text from these pages. Try taking clearer photos or typing the notes." },
+        ]);
+        return;
+      }
+
+      // Show the first image as a preview in the user message
+      const previewUrl = allDataUrls[0];
+      const summary = combinedText.split("\n").slice(0, 3).join(" ").slice(0, 140);
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: `[Imported notes]\n${summary}${combinedText.length > 140 ? "..." : ""}`, imageUrl: previewUrl },
+      ]);
+
+      send(combinedText, previewUrl, true);
+    } catch (err) {
+      console.error("Smart import failed", err);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Import failed. Please try again with fewer or clearer pages." },
+      ]);
+    } finally {
+      setUploading(false);
+      setImportProgress(null);
+      setImagePreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   async function uploadImageDataUrl(dataUrl: string) {
     setUploading(true);
     setImagePreview(dataUrl);
 
     try {
-      const formData = new FormData();
-      formData.append("userId", userId);
-      formData.append("image", dataUrl);
-
-      const uploadRes = await fetch("/api/agent/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const uploadData = await uploadRes.json();
-
-      if (uploadData.extractedText) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "user", content: `[Uploaded image]\n${uploadData.extractedText}`, imageUrl: dataUrl },
-        ]);
-        send(uploadData.extractedText, undefined, true);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: uploadData.error || "Could not read the image. Try typing the notes instead." },
-        ]);
-      }
+      const text = await ocrImageDataUrl(dataUrl);
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: `[Uploaded image]\n${text}`, imageUrl: dataUrl },
+      ]);
+      send(text, undefined, true);
     } catch (err) {
       console.error("Image upload failed", err);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Image upload failed. Please try again or type your notes." },
+        { role: "assistant", content: "Could not read the image. Try typing the notes instead." },
       ]);
     } finally {
       setUploading(false);
@@ -222,19 +326,26 @@ function ChatInner() {
     }
   }
 
-  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    try {
-      const dataUrl = await compressImage(file, 1200, 0.7);
-      await uploadImageDataUrl(dataUrl);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Could not read the image. Please try again or type your notes." },
-      ]);
+    const first = files[0];
+    if (files.length === 1 && first.type.startsWith("image/")) {
+      // Legacy single-image path
+      try {
+        const dataUrl = await compressImage(first, 1200, 0.7);
+        await uploadImageDataUrl(dataUrl);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Could not read the image. Please try again or type your notes." },
+        ]);
+      }
+      return;
     }
+
+    await smartImportFiles(files);
   }
 
   async function openCamera() {
@@ -461,12 +572,19 @@ function ChatInner() {
         <div ref={bottomRef} />
       </div>
 
-      {imagePreview && (
+      {(imagePreview || importProgress) && (
         <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3 flex items-center gap-3">
-          <img src={imagePreview} alt="Uploading" className="h-16 w-16 object-cover rounded-lg border border-slate-200" />
-          <div className="text-sm text-blue-800">
-            <p className="font-medium">Reading your notes...</p>
-            <p className="text-xs text-blue-600">This may take a few seconds.</p>
+          {imagePreview && <img src={imagePreview} alt="Uploading" className="h-16 w-16 object-cover rounded-lg border border-slate-200" />}
+          <div className="text-sm text-blue-800 flex-1">
+            <p className="font-medium">
+              {importProgress ? importProgress.label : "Reading your notes..."}
+            </p>
+            {importProgress && (
+              <p className="text-xs text-blue-600">
+                Page {importProgress.current} of {importProgress.total}
+              </p>
+            )}
+            {!importProgress && <p className="text-xs text-blue-600">This may take a few seconds.</p>}
           </div>
           {uploading && <div className="ml-auto w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />}
         </div>
@@ -518,9 +636,9 @@ function ChatInner() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleImageSelect}
+          accept="image/*,.pdf,application/pdf"
+          multiple
+          onChange={handleFileSelect}
           className="hidden"
         />
         <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-400">
@@ -533,11 +651,20 @@ function ChatInner() {
           >
             📷
           </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || uploading}
+            className="rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 transition"
+            aria-label="Upload notes or PDF"
+            title="Upload photos or PDF"
+          >
+            📎
+          </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Ask anything, type notes, or upload a photo..."
+            placeholder="Ask anything, type notes, or upload photos/PDF..."
             className="flex-1 bg-transparent px-2 py-2.5 text-slate-800 placeholder:text-slate-400 focus:outline-none"
           />
           <button
