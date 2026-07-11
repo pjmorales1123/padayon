@@ -12,6 +12,12 @@ import {
 import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack } from "@/lib/types";
 import { ModelRuntime } from "@/lib/fireworks";
 import { startRun, logStep } from "@/lib/agent-events";
+import {
+  getReplyHistoryForIntent,
+  getUploadConfirmation,
+  getUploadMaterialContent,
+  shouldPersistTopicForTurn,
+} from "@/lib/agent-routing";
 
 interface MaterialContent {
   text?: string;
@@ -19,6 +25,7 @@ interface MaterialContent {
   flashcards?: Array<{ front: string; back: string }>;
   quiz?: Array<{ question: string; choices: string[]; answer: string; explanation?: string }>;
   image_url?: string;
+  preview_image_url?: string;
 }
 
 const RETRIEVAL_INTENTS = [
@@ -502,6 +509,84 @@ export async function POST(req: NextRequest) {
     const curriculum = await curriculumAgent(classification, preferredModel);
     logStep(requestId, "curriculum", `Aligned to ${curriculum.grade_level} competency`, "done", { curriculum });
 
+    const hasUpload = Boolean(imageUrl);
+    const shouldPersistTopic =
+      Boolean(quizResult?.topic) ||
+      shouldPersistTopicForTurn({
+        intent: classification.intent,
+        topic: classification.topic,
+        hasUpload,
+        history,
+      });
+
+    if (!shouldPersistTopic) {
+      logStep(requestId, "topic", "Kept first topic mention as hidden candidate", "done", {
+        topic: classification.topic,
+        intent: classification.intent,
+      });
+
+      await supabaseAdmin!.from("messages").insert({
+        user_id: userId,
+        topic_id: null,
+        role: "user",
+        content: message,
+      });
+
+      logStep(requestId, "profile", "Loading full learner profile", "running");
+      const { data: p } = await supabaseAdmin!
+        .from("learner_profiles")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+      const profileRow = (p as ProfileRow | null) || null;
+      logStep(requestId, "profile", "Learner profile loaded", "done", { hasProfile: !!profileRow });
+
+      const teachingQuizResult = quizResult
+        ? { ...quizResult, topic: classification.topic }
+        : null;
+
+      logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
+      const reply = await teachingAgent(
+        message,
+        classification.topic,
+        curriculum,
+        profileRow || {},
+        getReplyHistoryForIntent(classification.intent, history),
+        undefined,
+        teachingQuizResult,
+        classification,
+        preferredModel,
+        (runtime) => { modelRuntime = runtime; }
+      );
+      const finalReply = reply && reply.length >= 10
+        ? reply
+        : `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;
+      logStep(requestId, "teach", "Reply ready", "done", { replyLength: finalReply.length, runtime: modelRuntime });
+
+      logStep(requestId, "save_reply", "Saving reply to conversation history", "running");
+      await supabaseAdmin!.from("messages").insert({
+        user_id: userId,
+        topic_id: null,
+        role: "assistant",
+        content: finalReply,
+      });
+      logStep(requestId, "save_reply", "Reply saved", "done");
+      logStep(requestId, "finish", "Response complete", "done", { candidate_topic: classification.topic });
+
+      return NextResponse.json({
+        requestId,
+        reply: finalReply,
+        classification,
+        curriculum,
+        topic: null,
+        materials_created: [],
+        saved_materials: [],
+        interactive: null,
+        memory_update: null,
+        model_runtime: modelRuntime,
+      });
+    }
+
     // 4. Find or create subject (case-insensitive to avoid duplicates)
     logStep(requestId, "subject", `Finding or creating subject: ${classification.subject}`, "running");
     const { data: subjects } = await supabaseAdmin!
@@ -572,6 +657,8 @@ export async function POST(req: NextRequest) {
 
     const isRetrieval = RETRIEVAL_INTENTS.includes(classification.intent);
     const isVisualRequest = classification.intent === "make_visual";
+    const isUploadOnly = Boolean(imageUrl);
+    const replyHistory = getReplyHistoryForIntent(classification.intent, history);
 
     async function loadMaterialsForTopic(topicId: string) {
       const { data } = await supabaseAdmin!.from("materials").select("*").eq("topic_id", topicId);
@@ -648,16 +735,17 @@ export async function POST(req: NextRequest) {
     }
 
     const shouldCreateMaterials =
-      classification.intent === "create_study_pack" ||
-      (isVisualRequest && !studyPack) ||
-      reply.includes("Let me create them");
+      !isUploadOnly &&
+      (classification.intent === "create_study_pack" ||
+        (isVisualRequest && !studyPack) ||
+        reply.includes("Let me create them"));
 
     // Visual requests: if we already have materials, reply quickly and let the HTML widget do the teaching.
     if (isVisualRequest && studyPack && !reply) {
       reply = `Here's an interactive visual for **${classification.topic}**. Tap the cards to flip them!`;
     }
 
-    const shouldTeach = !reply && !shouldCreateMaterials;
+    const shouldTeach = !reply && !shouldCreateMaterials && !isUploadOnly;
 
     let profileRow: Record<string, unknown> | null = null;
 
@@ -727,7 +815,7 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz\n✓ Summary${studyPack.story ? "\n✓ Story" : ""}`;
@@ -737,10 +825,7 @@ export async function POST(req: NextRequest) {
     if (imageUrl) {
       const uploadMaterialType = attachmentType === "pdf" ? "pdf_notes" : "image_notes";
       const uploadMaterialTitle = attachmentType === "pdf" ? "Uploaded PDF" : "Uploaded Image";
-      const uploadMaterialContent =
-        attachmentType === "pdf"
-          ? { preview_image_url: imageUrl }
-          : { image_url: imageUrl };
+      const uploadMaterialContent = getUploadMaterialContent(attachmentType, imageUrl, message);
 
       const { data: existingUploadMaterial } = await supabaseAdmin!
         .from("materials")
@@ -778,6 +863,10 @@ export async function POST(req: NextRequest) {
       if (!materials_created.includes(uploadMaterialType)) {
         materials_created.push(uploadMaterialType);
       }
+
+      if (!reply) {
+        reply = getUploadConfirmation(attachmentType, history);
+      }
     }
 
     if (!interactive && shouldCreateMaterials && topic) {
@@ -790,7 +879,7 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack || undefined, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack || undefined, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;

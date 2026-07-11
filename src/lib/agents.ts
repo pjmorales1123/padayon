@@ -391,6 +391,7 @@ How to adapt:
 - Keep it short and student-friendly. Use examples familiar to Filipino students when possible.
 - Academic term: If you respond partly in Filipino or Cebuano, you MUST include the English academic term **${topic}** at least once so the student learns the correct vocabulary.
 - Ask one guiding question at the end.
+- Treat the current student message and current Topic as the source of truth. Use recent conversation only when the student clearly asks to continue or retrieve something; do not say "since you asked about..." or combine a previous topic with the current one unless the student explicitly makes that connection.
 
 Learner profile: ${JSON.stringify(profile)}
 Topic: ${topic}
