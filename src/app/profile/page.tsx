@@ -113,7 +113,7 @@ function ProfileInner() {
   const displayName = user?.name || "Student";
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-8">
+    <main className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-slate-900">
           {displayName}&apos;s Learning Profile

@@ -478,7 +478,7 @@ function TopicPageInner() {
   };
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-8">
+    <main className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-2 min-w-0">
           {editingTitle ? (

@@ -74,6 +74,7 @@ function runtimeBadgeClass(runtime: AgentResponseRuntime | null): string {
 
 export interface ChatWorkspaceProps {
   userId: string;
+  topicId?: string;
   initialModel?: "auto" | "gemma-4";
   initialPrompt?: string;
   autoSend?: boolean;
@@ -85,6 +86,7 @@ export interface ChatWorkspaceProps {
 
 export default function ChatWorkspace({
   userId,
+  topicId,
   initialModel = "auto",
   initialPrompt = "",
   autoSend = false,
@@ -140,34 +142,45 @@ export default function ChatWorkspace({
       .catch(() => setUserName("Student"));
   }, [userId]);
 
-  // Load recent conversation history so the student can see previous chats.
+  // Load conversation history for the selected topic (or all chats if no topic is selected).
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/messages?userId=${encodeURIComponent(userId)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled || !Array.isArray(d.messages)) return;
-        const history = d.messages.map((m: { role: string; content: string; topic_id?: string | null }) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-          topicId: m.topic_id || undefined,
-        }));
-        setMessages(history);
-      })
-      .catch(() => {
+    const loadHistory = async () => {
+      try {
+        let history: ChatMessage[] = [];
+        if (topicId) {
+          const res = await fetch(`/api/topic/${topicId}?userId=${encodeURIComponent(userId)}`);
+          const d = await res.json();
+          history = (d.messages || []).map((m: { role: string; content: string; topic_id?: string | null }) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            topicId: m.topic_id || undefined,
+          }));
+        } else {
+          const res = await fetch(`/api/messages?userId=${encodeURIComponent(userId)}`);
+          const d = await res.json();
+          history = (d.messages || []).map((m: { role: string; content: string; topic_id?: string | null }) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            topicId: m.topic_id || undefined,
+          }));
+        }
+        if (!cancelled) setMessages(history);
+      } catch {
         // History is optional; don't block the chat if it fails.
-      });
+      }
+    };
+    loadHistory();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, topicId]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
-    const el = bottomRef.current;
-    if (!container || !el) return;
+    if (!container) return;
     requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: messages.length > 2 ? "smooth" : "auto", block: "end" });
+      container.scrollTop = container.scrollHeight;
     });
   }, [messages, stepLabel, requestState]);
 
@@ -527,7 +540,7 @@ export default function ChatWorkspace({
 
   return (
     <section aria-label="PADAYON chat workspace" className="flex flex-col h-full min-h-0">
-      <main className={`max-w-3xl mx-auto w-full px-4 py-4 flex flex-col min-h-0 ${embedded ? "h-full" : "h-[calc(100vh-4rem)]"}`}>
+      <main className="w-full h-full px-4 py-4 flex flex-col min-h-0">
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -834,7 +847,7 @@ export default function ChatWorkspace({
             onChange={handleFileSelect}
             className="hidden"
           />
-          <div className="w-full max-w-3xl flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-400">
+          <div className="w-full flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-400">
             <button
               onClick={openCamera}
               disabled={busy}

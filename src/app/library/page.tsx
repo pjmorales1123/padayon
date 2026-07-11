@@ -180,7 +180,7 @@ function LibraryInner() {
     .filter((s) => s.topics.length > 0 || s.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-8">
+    <main className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Library</h1>
       </div>
@@ -236,7 +236,7 @@ function LibraryInner() {
       )}
 
       {!loading && !error && (
-        <div className="grid gap-5">
+        <div className="grid gap-6">
           {filteredSubjects.map((subject) => (
             <div key={subject.id} className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
               <div className="flex items-center justify-between gap-3 p-4 bg-slate-50 border-b border-slate-200">
@@ -282,7 +282,7 @@ function LibraryInner() {
               </div>
 
               {expanded[subject.id] && (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100 p-2">
                   {(subject.topics || []).length === 0 && (
                     <p className="p-4 text-sm text-slate-400">No topics yet. Start studying in chat.</p>
                   )}
@@ -300,7 +300,7 @@ function LibraryInner() {
                     return (
                       <div
                         key={topic.id}
-                        className="group flex items-center justify-between gap-4 p-4 hover:bg-slate-50 transition"
+                        className="group flex items-center justify-between gap-4 p-4 rounded-xl hover:bg-slate-50 transition"
                       >
                         <Link
                           href={buildAppHref(`/topic/${topic.id}`, userId)}
