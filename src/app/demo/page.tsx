@@ -9,7 +9,8 @@ const DEMO_USER_ID = "demo-new-student";
 function DemoQueryAdapter() {
   const searchParams = useSearchParams();
   const userId = searchParams?.get("userId") || DEMO_USER_ID;
-  return <DemoWorkspace initialUserId={userId} />;
+  const startFresh = searchParams?.get("new") === "1";
+  return <DemoWorkspace initialUserId={userId} startFresh={startFresh} />;
 }
 
 export default function Demo() {

@@ -152,13 +152,13 @@ export default function Home() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href={buildAppHref("/chat", activeUserId)}
+                  href={`${buildAppHref("/chat", activeUserId)}&new=1`}
                   className="rounded-xl bg-blue-600 text-white px-6 py-3 font-semibold hover:bg-blue-700 transition"
                 >
                   Start studying →
                 </Link>
                 <Link
-                  href={buildAppHref("/demo", activeUserId)}
+                  href={`${buildAppHref("/demo", activeUserId)}&new=1`}
                   className="rounded-xl bg-white text-slate-700 border border-slate-300 px-6 py-3 font-semibold hover:bg-slate-50 transition"
                 >
                   See Live Demo

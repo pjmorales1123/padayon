@@ -26,6 +26,7 @@ function ChatPageInner() {
   const initialPrompt = searchParams?.get("prompt") || undefined;
   const autoSend = searchParams?.get("autoSend") === "1";
   const initialRequestId = searchParams?.get("requestId") || undefined;
+  const startFresh = searchParams?.get("new") === "1";
 
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
@@ -114,6 +115,7 @@ function ChatPageInner() {
           initialPrompt={initialPrompt}
           autoSend={autoSend}
           initialRequestId={initialRequestId}
+          startFresh={startFresh}
         />
       </div>
     </main>

@@ -80,6 +80,7 @@ export interface ChatWorkspaceProps {
   autoSend?: boolean;
   initialRequestId?: string;
   embedded?: boolean;
+  startFresh?: boolean;
   onRequestStart?: (requestId: string) => void;
   onRequestComplete?: (requestId: string) => void;
 }
@@ -92,6 +93,7 @@ export default function ChatWorkspace({
   autoSend = false,
   initialRequestId,
   embedded = false,
+  startFresh = false,
   onRequestStart,
   onRequestComplete,
 }: ChatWorkspaceProps) {
@@ -106,6 +108,7 @@ export default function ChatWorkspace({
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; label: string } | null>(null);
   const [model, setModel] = useState<"auto" | "gemma-4">(initialModel);
   const [modelStatus, setModelStatus] = useState<{ gemma3?: boolean; gemma4?: boolean }>({});
+  const [skipHistory, setSkipHistory] = useState(startFresh);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -144,6 +147,7 @@ export default function ChatWorkspace({
 
   // Load conversation history for the selected topic (or all chats if no topic is selected).
   useEffect(() => {
+    if (skipHistory) return;
     let cancelled = false;
     const loadHistory = async () => {
       try {
@@ -174,7 +178,7 @@ export default function ChatWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [userId, topicId]);
+  }, [userId, topicId, skipHistory]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -291,10 +295,11 @@ export default function ChatWorkspace({
     }
   }, [userId, model, onRequestStart, onRequestComplete]);
 
-  async function ocrImageDataUrl(dataUrl: string): Promise<string> {
+  async function ocrImageDataUrl(dataUrl: string, requestId?: string): Promise<string> {
     const formData = new FormData();
     formData.append("userId", userId);
     formData.append("image", dataUrl);
+    if (requestId) formData.append("requestId", requestId);
     const uploadRes = await fetch("/api/agent/upload", { method: "POST", body: formData });
     const uploadData = await uploadRes.json();
     if (!uploadRes.ok || !uploadData.extractedText) {
@@ -358,6 +363,9 @@ export default function ChatWorkspace({
 
     setUploading(true);
     setImportProgress({ current: 0, total: imageFiles.length + pdfFiles.length * 3, label: "Preparing your notes..." });
+    const requestId = generateId("req");
+    initialRequestIdRef.current = requestId;
+    onRequestStart?.(requestId);
 
     try {
       const allDataUrls: string[] = [];
@@ -385,7 +393,7 @@ export default function ChatWorkspace({
       for (let i = 0; i < allDataUrls.length; i++) {
         setImportProgress({ current: i + 1, total: allDataUrls.length, label: `Reading page ${i + 1}/${allDataUrls.length}...` });
         try {
-          const text = await ocrImageDataUrl(allDataUrls[i]);
+          const text = await ocrImageDataUrl(allDataUrls[i], requestId);
           if (text.trim().length > 5) extractedParts.push(text.trim());
         } catch (err) {
           console.warn("OCR failed for page", i, err);
@@ -415,6 +423,7 @@ export default function ChatWorkspace({
     } catch (err) {
       console.error("Smart import failed", err);
       showAssistantError("Import failed. Please try again with fewer or clearer pages.");
+      onRequestComplete?.(requestId);
     } finally {
       setUploading(false);
       setImportProgress(null);
@@ -426,9 +435,12 @@ export default function ChatWorkspace({
   async function uploadImageDataUrl(dataUrl: string) {
     setUploading(true);
     setImagePreview(dataUrl);
+    const requestId = generateId("req");
+    initialRequestIdRef.current = requestId;
+    onRequestStart?.(requestId);
 
     try {
-      const text = await ocrImageDataUrl(dataUrl);
+      const text = await ocrImageDataUrl(dataUrl, requestId);
       setMessages((prev) => [
         ...prev,
         { role: "user", content: `[Uploaded image]\n${text}`, imageUrl: dataUrl },
@@ -437,6 +449,7 @@ export default function ChatWorkspace({
     } catch (err) {
       console.error("Image upload failed", err);
       showAssistantError("Could not read the image. Try typing the notes instead.");
+      onRequestComplete?.(requestId);
     } finally {
       setUploading(false);
       setImagePreview(null);
@@ -585,6 +598,19 @@ export default function ChatWorkspace({
             >
               <span>＋</span>
               <span>New profile</span>
+            </button>
+            <button
+              onClick={() => {
+                setMessages([]);
+                setSkipHistory(true);
+                autoSentRef.current = false;
+              }}
+              disabled={busy}
+              className="hidden sm:inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Start a new conversation"
+            >
+              <span>🗨️</span>
+              <span>New chat</span>
             </button>
             <label htmlFor="model-select" className="sr-only">Model</label>
             <select

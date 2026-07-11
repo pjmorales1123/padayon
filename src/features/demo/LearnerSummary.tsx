@@ -149,9 +149,18 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
         });
       }
       (t.materials || []).forEach((m) => {
+        const folder = `${t.subjectName} → ${t.subcategory || "General"} → ${t.title}`;
+        let text = `Saved ${m.type.replace(/_/g, " ")} on ${folder}`;
+        if (m.type === "image_notes") {
+          text = `Organized pictures on ${folder}`;
+        } else if (m.type === "clean_notes") {
+          text = `Saved transcribed notes on ${folder}`;
+        } else if (m.type === "original_notes") {
+          text = `Imported original notes on ${folder}`;
+        }
         events.push({
           ts: m.created_at || t.last_studied_at || new Date().toISOString(),
-          text: `Saved ${m.type.replace(/_/g, " ")} for ${t.title}`,
+          text,
         });
       });
       return events;

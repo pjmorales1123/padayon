@@ -11,6 +11,7 @@ import { DEMO_PERSONAS } from "./demo-personas";
 
 interface DemoWorkspaceProps {
   initialUserId: string;
+  startFresh?: boolean;
 }
 
 type MobileTab = "chat" | "profile" | "agents";
@@ -21,7 +22,7 @@ const MOBILE_TABS: { key: MobileTab; label: string }[] = [
   { key: "agents", label: "Agents" },
 ];
 
-export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
+export default function DemoWorkspace({ initialUserId, startFresh = false }: DemoWorkspaceProps) {
   const router = useRouter();
   const [userId, setUserId] = useState(initialUserId);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
@@ -165,11 +166,21 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 p-4 grid-rows-[minmax(0,1fr)] [grid-template-columns:minmax(0,1fr)] md:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] lg:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-        <div className={`${panelClass("profile")} md:col-span-2 lg:col-span-1 min-h-0 overflow-hidden`}>
+        <div className={`${panelClass("profile")} md:col-span-2 lg:col-span-1 min-h-0 overflow-hidden flex flex-col gap-2`}>
+          <div className="hidden lg:block rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+            <p className="text-xs font-medium text-blue-800">
+              📊 Learner summary — see how PADAYON tracks and updates this student.
+            </p>
+          </div>
           <LearnerSummary userId={userId} refreshKey={refreshKey} />
         </div>
 
         <div className={`${panelClass("chat")} flex min-w-0 flex-col gap-3 min-h-0 overflow-hidden`}>
+          <div className="hidden lg:block rounded-xl border border-purple-200 bg-purple-50 px-3 py-2">
+            <p className="text-xs font-medium text-purple-800">
+              💬 Chat — ask questions, upload notes/photos, or request study materials.
+            </p>
+          </div>
           <ChatWorkspace
             key={`${userId}-${promptKey}`}
             embedded
@@ -178,12 +189,18 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
             initialPrompt={initialPrompt}
             autoSend={autoSend}
             initialRequestId={activeRequestId ?? undefined}
+            startFresh={startFresh}
             onRequestStart={setActiveRequestId}
             onRequestComplete={setActiveRequestId}
           />
         </div>
 
-        <div className={`${panelClass("agents")} min-h-0 overflow-hidden`}>
+        <div className={`${panelClass("agents")} min-h-0 overflow-hidden flex flex-col gap-2`}>
+          <div className="hidden lg:block rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <p className="text-xs font-medium text-emerald-800">
+              🔍 Live agent trail — watch what the AI agents are working on in real time.
+            </p>
+          </div>
           <AgentTrail requestId={activeRequestId} />
         </div>
       </div>

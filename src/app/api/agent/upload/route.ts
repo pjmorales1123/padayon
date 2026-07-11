@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callFireworksVision } from "@/lib/fireworks";
+import { startRun, logStep } from "@/lib/agent-events";
 
 export async function POST(req: NextRequest) {
+  let requestId: string | null = null;
   try {
     const formData = await req.formData();
     const userId = formData.get("userId") as string;
     const image = formData.get("image") as string;
+    requestId = formData.get("requestId") as string | null;
 
     if (!userId || !image) {
       return NextResponse.json({ error: "Missing userId or image" }, { status: 400 });
@@ -13,6 +16,12 @@ export async function POST(req: NextRequest) {
 
     if (!image.startsWith("data:image/")) {
       return NextResponse.json({ error: "Invalid image format" }, { status: 400 });
+    }
+
+    if (requestId) {
+      startRun(requestId, userId, "Uploaded image notes");
+      logStep(requestId, "start", "Received uploaded image for OCR", "done");
+      logStep(requestId, "retrieve", "Reading text from uploaded picture", "running");
     }
 
     const prompt = `You are an OCR assistant for PADAYON, an AI learning partner for Filipino students.
@@ -36,18 +45,29 @@ Output format: plain text only. No markdown, no code fences, no explanations, no
     }
 
     if (!extractedText || extractedText.trim().length < 5) {
+      if (requestId) {
+        logStep(requestId, "retrieve", "Could not read text from the image", "error");
+      }
       return NextResponse.json(
         { error: "Could not read text from the image. Try a clearer photo." },
         { status: 422 }
       );
     }
 
+    if (requestId) {
+      logStep(requestId, "retrieve", "Transcribed notes from uploaded picture", "done", { textLength: extractedText.trim().length });
+    }
+
     return NextResponse.json({
       extractedText: extractedText.trim(),
       previewSummary: extractedText.trim().split("\n")[0].slice(0, 120),
+      requestId: requestId || undefined,
     });
   } catch (err) {
     console.error("Upload OCR error:", err);
+    if (requestId) {
+      logStep(requestId, "retrieve", "Image processing failed", "error", { error: String(err) });
+    }
     const message = err instanceof Error ? err.message : "Image processing failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }

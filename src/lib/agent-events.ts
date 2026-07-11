@@ -53,6 +53,8 @@ export function getAllRuns(limit = 50): AgentRun[] {
 }
 
 export function startRun(requestId: string, userId: string, message: string): AgentRun {
+  const existing = store.get(requestId);
+  if (existing) return existing;
   const run: AgentRun = {
     requestId,
     userId,
