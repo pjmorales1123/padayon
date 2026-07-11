@@ -491,7 +491,7 @@ function buildFastHtmlVisual(
     .filter((s) => s.length > 10 && s.length < 120)
     .slice(0, 4);
 
-  const cards = (studyPack.flashcards || []).slice(0, 3).map((c, i) => `
+  const cards = (studyPack.flashcards || []).slice(0, 3).map((c) => `
     <div class="flip-card" onclick="this.classList.toggle('flipped')">
       <div class="flip-card-inner">
         <div class="flip-card-front">${escapeHtml(c.front)}</div>

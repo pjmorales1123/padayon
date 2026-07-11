@@ -93,9 +93,30 @@ function StatusBadge({ status }: { status: AgentEvent["status"] }) {
   );
 }
 
+function SkeletonStep({ count = 4 }: { count?: number }) {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="relative flex gap-3 pb-4">
+          <div className="relative z-10 flex flex-col items-center">
+            <div className="h-10 w-10 rounded-full border-2 border-slate-800 bg-slate-800" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-3 space-y-2">
+              <div className="h-4 w-1/3 rounded bg-slate-800 animate-pulse" />
+              <div className="h-3 w-2/3 rounded bg-slate-800 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AgentTrail({ requestId }: AgentTrailProps) {
   const [eventsById, setEventsById] = useState<Record<string, AgentEvent[]>>({});
   const [failuresById, setFailuresById] = useState<Record<string, number>>({});
+  const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const events = useMemo(() => (requestId ? eventsById[requestId] || [] : []), [eventsById, requestId]);
@@ -106,6 +127,7 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
 
     const poll = async () => {
       if (!requestId) return;
+      setIsLoading(true);
       try {
         const res = await fetch(`/api/agent/run?requestId=${encodeURIComponent(requestId)}`);
         if (!res.ok) {
@@ -122,6 +144,10 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
       } catch {
         if (!cancelled) {
           setFailuresById((prev) => ({ ...prev, [requestId]: (prev[requestId] || 0) + 1 }));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
         }
       }
     };
@@ -158,17 +184,18 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
   const finishEvent = events.find((e) => e.step === "finish" && e.status === "done");
   const createdMaterials = (finishEvent?.detail?.materials_created as string[] | undefined) || [];
   const showRetry = failures >= 3;
+  const showLoading = isLoading && events.length === 0 && failures < 3;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-slate-100">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-slate-100">
       <div className="border-b border-slate-800 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">Backend Agents Monitor</h2>
-          <span className="rounded-full bg-green-900 px-2 py-1 text-xs font-medium text-green-300">
+          <h2 className="text-lg font-bold truncate">Backend Agents Monitor</h2>
+          <span className="rounded-full bg-green-900 px-2 py-1 text-xs font-medium text-green-300 shrink-0">
             ● live
           </span>
         </div>
-        <p className="mt-1 text-xs text-slate-400">
+        <p className="mt-1 text-xs text-slate-400 truncate">
           Request ID: <code className="text-slate-300">{requestId}</code>
         </p>
         <div className="mt-3">
@@ -185,7 +212,7 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 min-w-0">
         {showRetry && (
           <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-950/40 p-3">
             <p className="text-xs text-amber-200">
@@ -204,6 +231,8 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
           </div>
         )}
 
+        {showLoading && <SkeletonStep />}
+
         {runningEvent && (
           <div className="mb-4 rounded-xl border border-blue-500/40 bg-blue-950/40 p-3">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-blue-300">
@@ -212,12 +241,12 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
             <div className="flex items-center gap-3">
               <div className="text-2xl">{STEP_INFO[runningEvent.step]?.icon || STEP_ICONS[runningEvent.step] || "⚙️"}</div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-100">
+                <p className="text-sm font-medium text-slate-100 truncate">
                   {STEP_INFO[runningEvent.step]?.title || runningEvent.step}
                 </p>
-                <p className="text-xs text-slate-300">{runningEvent.label}</p>
+                <p className="text-xs text-slate-300 truncate">{runningEvent.label}</p>
               </div>
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent shrink-0" />
             </div>
             {runningEvent.detail && Object.keys(runningEvent.detail).length > 0 && (
               <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-950/80 p-2 text-[10px] text-slate-400">
@@ -265,13 +294,13 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium text-slate-200">{info.title}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-200 truncate">{info.title}</p>
                         <p className="text-xs text-slate-400">{info.description}</p>
                       </div>
                       <StatusBadge status={e.status} />
                     </div>
-                    <p className="mt-1.5 text-xs text-slate-300">{e.label}</p>
+                    <p className="mt-1.5 text-xs text-slate-300 break-words">{e.label}</p>
                     {showDetail && e.detail && Object.keys(e.detail).length > 0 && (
                       <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-950 p-2 text-[10px] text-slate-400">
                         {JSON.stringify(e.detail, null, 2)}

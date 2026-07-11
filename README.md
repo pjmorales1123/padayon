@@ -17,21 +17,23 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 **Key features:**
 - Automatic subject/topic detection from messy notes or keywords
 - Curriculum alignment to a seeded Budget of Work
-- Auto-generation of clean notes, reviewer, flashcards, quiz, and summary
+- Auto-generation of clean notes, reviewer, flashcards, quiz, summary, and story
 - Translanguaging teaching (e.g., Cebuano-first, then academic English)
 - Persistent memory that grows with the learner
 - Retrieval of saved materials across sessions
 - Quiz submission with real score tracking and progress visualization
 - Editable learner profile (name, language confidence, learning style, strengths, weaknesses)
 - Conversation history awareness for more coherent teaching responses
+- Explicit recovery states: loading, slow, error, retry, empty, and fallback
+- Smart import validation: up to 10 files, 12 MB each, images and PDFs only
 
 ## How it uses AMD / Fireworks / Gemma
 
 - **AI Runtime:** Fireworks AI API — Fireworks is an AMD partner and hosts fast, serverless models on AMD infrastructure, used here as the reliable production runtime.
 - **Default Models:** `deepseek-v4-flash` / `kimi-k2p5` — fast, serverless Fireworks models that power the agent pipeline and fallback.
-- **Gemma Toggle:** The chat UI lets you switch to **Gemma 3** or **Gemma 4** when a Gemma endpoint is available (Fireworks on-demand or AMD Developer Cloud GPU pod).
+- **Gemma Toggle:** The chat UI lets you switch to **Gemma 4** when a Gemma endpoint is available (Fireworks on-demand or AMD Developer Cloud GPU pod).
 - **Architecture:** Separate agent prompts sent to the model for classification, curriculum alignment, material creation, teaching, and memory updates.
-- **Fallback:** If Gemma is unreachable, PADAYON automatically falls back to the Fireworks serverless model so the demo never breaks.
+- **Fallback:** If Gemma is unreachable, PADAYON automatically falls back to the Fireworks serverless model so the demo never breaks. The UI badge reads `Fallback · Fireworks` and never presents fallback as Gemma.
 
 ## Agent Architecture
 
@@ -46,7 +48,11 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 ## Setup Instructions
 
 1. Clone the repository
-2. Copy `.env.local` and fill in your credentials:
+2. Copy `.env.example` to `.env.local` and fill in your credentials:
+   ```powershell
+   cp .env.example .env.local
+   ```
+   Example values are in `.env.example`:
    ```
    NEXT_PUBLIC_SUPABASE_URL=
    NEXT_PUBLIC_SUPABASE_ANON_KEY=
@@ -67,21 +73,20 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 3. Run the database migrations. You have two options:
    - **Option A:** Open `supabase/migrations/001_initial.sql` in the Supabase dashboard SQL editor and run it.
    - **Option B:** From a machine with direct Postgres access, run:
-     ```
-     set DATABASE_URL=postgresql://user:password@host:5432/db
+     ```powershell
+     $env:DATABASE_URL="postgresql://user:password@host:5432/db"
      npm run migrate
      ```
 4. Seed the curriculum and demo user:
-   ```
-   POST /api/seed
-   { "userId": "demo-user-id" }
+   ```powershell
+   Invoke-RestMethod -Uri "http://localhost:3000/api/seed" -Method POST -Body '{"userId":"demo-user-id"}' -ContentType "application/json"
    ```
 5. Install dependencies:
-   ```
+   ```powershell
    npm install
    ```
 6. Run the dev server:
-   ```
+   ```powershell
    npm run dev
    ```
 
@@ -102,6 +107,20 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 | `GEMMA_4_ENDPOINT` | External OpenAI-compatible endpoint for Gemma 4 (optional) |
 | `GEMMA_API_KEY` | API key for the Gemma endpoint (optional, falls back to FIREWORKS_API_KEY) |
 
+## Persona-Preserving Navigation
+
+Every primary link carries the selected `userId` query parameter, so switching between Home, Live Demo, Chat, Library, Profile, and Topic keeps the current learner context. The shared `AppNavigation` component builds query-aware hrefs and warns before leaving a page that is still working.
+
+## Actual-Runtime Badge
+
+After each assistant reply, the chat header shows the model that actually served the request:
+
+- `Gemma 4` — the Gemma endpoint responded and fallback was not used.
+- `Auto · primary` — the default Fireworks serverless model responded.
+- `Fallback · Fireworks` — Gemma was requested but unreachable, so the request fell back to Fireworks.
+
+The badge is driven by `model_runtime` returned from `/api/agent`, not by the UI toggle alone.
+
 ## Demo Flow
 
 1. **Messy Notes:** Student types `photosynthesis chlorophyll sunlight CO2 oxygen glucose food important`
@@ -109,14 +128,34 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 3. **Materials:** AI creates clean notes, reviewer, flashcards, and quiz
 4. **Library:** Student views saved topic and materials in the Library
 5. **Translanguaging:** Student asks `unsa diay ang photosynthesis?` and gets Cebuano-first explanation
-6. **Model toggle:** Switch from the default serverless model to **Gemma 3/4** in the chat header for the demo
+6. **Model toggle:** Switch from the default serverless model to **Gemma 4** in the chat header for the demo
 7. **Retrieval:** Student starts new chat and says `show my flashcards` — saved flashcards are retrieved
 8. **Quiz:** Student takes the quiz; score is saved and progress is updated
 9. **Profile:** Learning profile shows updated language confidence, strengths, weaknesses, and can be edited
 
+## Fallback-First Demo Rehearsal
+
+Before testing Gemma, rehearse and verify the fallback path:
+
+1. Start the app with only `FIREWORKS_API_KEY` set (no Gemma endpoint).
+2. Select any demo persona and send a judge prompt.
+3. Confirm the learning trail completes and the badge reads `Auto · primary`.
+4. Switch the model toggle to **Gemma 4** and send another prompt.
+5. Confirm the response still succeeds and the badge reads `Fallback · Fireworks`.
+6. Only after the fallback path passes should you configure a real Gemma endpoint for Gate 2.
+
 ## Gemma Demo Setup
 
 The production architecture is AMD-ready through Fireworks AI (an AMD partner) and AMD Developer Cloud. The current demo uses available Fireworks serverless models for reliability, with Gemma endpoints supported when accessible.
+
+### Gemma Gate
+
+Do not claim Gemma is verified until:
+- `/api/health` returns `gemma4Configured: true`
+- A prompt sent with **Gemma 4** returns `model_runtime: { provider: "gemma", fallback: false }`
+- A controlled unavailable Gemma target falls back to Fireworks with `model_runtime: { requested: "gemma-4", provider: "fireworks", fallback: true }`
+
+Run fallback verification first, then Gemma verification, and record the results in `docs/demo-readiness-report.md`.
 
 ### AMD Developer Cloud GPU pod (best for the AMD track)
 
@@ -163,17 +202,27 @@ If you have no Gemma endpoint, the toggle still works but will fall back to the 
 
 ## Tech Stack
 
-- Next.js (App Router)
-- Tailwind CSS
+- Next.js 16.2.10 (App Router)
+- React 19.2.4
+- TypeScript
+- Tailwind CSS 4
 - Supabase (Postgres)
 - Fireworks AI API + optional Gemma endpoint
-- Vercel (hosting)
+- Vitest + Testing Library
 - Docker (submission)
+
+## Development Commands
+
+```powershell
+npm test
+npm run lint
+npm run build
+```
 
 ## Submission
 
-Build the Docker image:
-```
+Build and run the Docker image:
+```powershell
 docker build -t padayon .
 docker run -p 3000:3000 padayon
 ```

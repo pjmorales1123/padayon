@@ -70,27 +70,58 @@ function TopicPageInner() {
   const [showResults, setShowResults] = useState(false);
   const [quizSubmitting, setQuizSubmitting] = useState(false);
   const [quizFeedback, setQuizFeedback] = useState<string | null>(null);
+  const [quizSaveError, setQuizSaveError] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState("");
   const [methodReply, setMethodReply] = useState<string | null>(null);
   const [methodLoading, setMethodLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     fetch(`/api/topic/${id}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `Could not load topic (${r.status})`);
+        return data;
+      })
       .then((d) => {
-        if (d.topic) setTopic(d.topic);
+        if (cancelled) return;
+        if (d.topic) {
+          setTopic(d.topic);
+          setNotFound(false);
+        } else {
+          setNotFound(true);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setPageError(err instanceof Error ? err.message : "Could not load topic");
+      })
+      .finally(() => {
+        if (!cancelled) setPageLoading(false);
       });
-  }, [id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, retryCount]);
 
   const getMaterial = (type: string): Material | undefined =>
     topic?.materials?.find((m) => m.type === type);
 
   const refreshTopic = async () => {
-    const res = await fetch(`/api/topic/${id}`);
-    const d = await res.json();
-    if (d.topic) setTopic(d.topic);
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/topic/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Could not refresh topic (${res.status})`);
+      if (data.topic) setTopic(data.topic);
+    } catch (err) {
+      console.error("Refresh topic failed", err);
+    }
   };
 
   const submitQuiz = async () => {
@@ -99,6 +130,7 @@ function TopicPageInner() {
     if (questions.length === 0) return;
 
     setQuizSubmitting(true);
+    setQuizSaveError(null);
     let score = 0;
     const answers: Array<{ questionIndex: number; selected: string; correct: boolean }> = [];
 
@@ -122,12 +154,14 @@ function TopicPageInner() {
         }),
       });
       const data = await res.json();
-      if (data.success) {
-        setQuizFeedback(`Score: ${score}/${questions.length} (${data.percentage}%)`);
-        await refreshTopic();
+      if (!res.ok || !data.success) {
+        setQuizSaveError(data.error || `Could not save quiz (${res.status})`);
+        return;
       }
+      setQuizFeedback(`Score: ${score}/${questions.length} (${data.percentage}%)`);
+      await refreshTopic();
     } catch (err) {
-      console.error("Quiz submit failed", err);
+      setQuizSaveError(err instanceof Error ? err.message : "Could not save quiz");
     } finally {
       setQuizSubmitting(false);
       setShowResults(true);
@@ -137,23 +171,37 @@ function TopicPageInner() {
   const renameTopic = async () => {
     const title = titleInput.trim();
     if (!title || !id) return;
-    const res = await fetch(`/api/topic/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    const data = await res.json();
-    if (data.success) {
+    try {
+      const res = await fetch(`/api/topic/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        console.error("Rename failed", data.error);
+        return;
+      }
       setTopic((prev) => (prev ? { ...prev, title } : prev));
       setEditingTitle(false);
+    } catch (err) {
+      console.error("Rename failed", err);
     }
   };
 
   const deleteTopic = async () => {
     if (!topic || !window.confirm(`Delete "${topic.title}" permanently?`)) return;
-    const res = await fetch(`/api/topic/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (data.success) router.push(`/library?userId=${userId}`);
+    try {
+      const res = await fetch(`/api/topic/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        console.error("Delete failed", data.error);
+        return;
+      }
+      router.push(buildAppHref("/library", userId));
+    } catch (err) {
+      console.error("Delete failed", err);
+    }
   };
 
   const runStudyMethod = async (key: string) => {
@@ -173,6 +221,10 @@ function TopicPageInner() {
         body: JSON.stringify({ userId, message }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        setMethodReply(data.error || `Request failed (${res.status})`);
+        return;
+      }
       setMethodReply(data.reply || "No response.");
       await refreshTopic();
     } catch (err) {
@@ -329,6 +381,19 @@ function TopicPageInner() {
         const questions = m?.content?.quiz || [];
         return (
           <div className="space-y-4">
+            {quizSaveError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-800">
+                <p className="font-medium">Could not save your quiz</p>
+                <p>{quizSaveError}</p>
+                <button
+                  onClick={submitQuiz}
+                  disabled={quizSubmitting}
+                  className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  Retry save
+                </button>
+              </div>
+            )}
             {questions.length === 0 && (
               <div className="text-slate-400">No quiz yet.</div>
             )}
@@ -416,7 +481,7 @@ function TopicPageInner() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {editingTitle ? (
             <input
               value={titleInput}
@@ -427,7 +492,7 @@ function TopicPageInner() {
               className="text-2xl font-bold text-slate-900 rounded border border-slate-300 px-2 py-1"
             />
           ) : (
-            <h1 className="text-2xl font-bold text-slate-900">
+            <h1 className="text-2xl font-bold text-slate-900 truncate">
               {topic?.title || "Topic"}
             </h1>
           )}
@@ -436,12 +501,12 @@ function TopicPageInner() {
               setEditingTitle(true);
               setTitleInput(topic?.title || "");
             }}
-            className="text-sm text-slate-500 hover:text-blue-600"
+            className="text-sm text-slate-500 hover:text-blue-600 shrink-0"
           >
             Rename
           </button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <AppNavigation userId={userId} />
           <Link
             href={buildAppHref("/library", userId)}
@@ -458,53 +523,89 @@ function TopicPageInner() {
         </div>
       </div>
 
-      <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 mb-6">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">Study methods</h3>
-        <div className="flex flex-wrap gap-2">
-          {studyMethods.map((m) => (
-            <button
-              key={m.key}
-              onClick={() => runStudyMethod(m.key)}
-              disabled={methodLoading}
-              className="rounded-lg bg-white border border-blue-200 text-blue-800 px-3 py-1.5 text-sm hover:bg-blue-100 disabled:opacity-50"
-            >
-              {m.label}
-            </button>
-          ))}
+      {pageLoading && (
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          <p className="text-slate-500">Loading topic...</p>
         </div>
-        {methodLoading && (
-          <p className="text-sm text-blue-700 mt-2 flex items-center gap-2">
-            <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            Asking PADAYON...
-          </p>
-        )}
-        {methodReply && (
-          <div className="mt-3 text-sm text-slate-800 bg-white rounded-lg p-3 border border-blue-100">
-            <MarkdownRenderer>{methodReply}</MarkdownRenderer>
-          </div>
-        )}
-      </div>
+      )}
 
-      <div className="flex gap-2 overflow-x-auto mb-6 pb-1">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => {
-              setActiveTab(tab);
-              setShowResults(false);
-            }}
-            className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${
-              activeTab === tab
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-            }`}
+      {!pageLoading && notFound && (
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <p className="text-lg font-semibold text-slate-900 mb-2">Topic not found</p>
+          <p className="text-sm text-slate-500 mb-4">The topic you are looking for does not exist or was deleted.</p>
+          <Link
+            href={buildAppHref("/library", userId)}
+            className="inline-flex rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
           >
-            {tab}
-          </button>
-        ))}
-      </div>
+            Back to Library
+          </Link>
+        </div>
+      )}
 
-      {renderContent()}
+      {!pageLoading && pageError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+          <p className="text-sm font-medium text-red-800 mb-3">{pageError}</p>
+          <button
+            onClick={() => setRetryCount((c) => c + 1)}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!pageLoading && !pageError && !notFound && (
+        <>
+          <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 mb-6">
+            <h3 className="text-sm font-semibold text-blue-900 mb-2">Study methods</h3>
+            <div className="flex flex-wrap gap-2">
+              {studyMethods.map((m) => (
+                <button
+                  key={m.key}
+                  onClick={() => runStudyMethod(m.key)}
+                  disabled={methodLoading}
+                  className="rounded-lg bg-white border border-blue-200 text-blue-800 px-3 py-1.5 text-sm hover:bg-blue-100 disabled:opacity-50"
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {methodLoading && (
+              <p className="text-sm text-blue-700 mt-2 flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                Asking PADAYON...
+              </p>
+            )}
+            {methodReply && (
+              <div className="mt-3 text-sm text-slate-800 bg-white rounded-lg p-3 border border-blue-100">
+                <MarkdownRenderer>{methodReply}</MarkdownRenderer>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto mb-6 pb-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => {
+                  setActiveTab(tab);
+                  setShowResults(false);
+                }}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${
+                  activeTab === tab
+                    ? "bg-blue-600 text-white"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {renderContent()}
+        </>
+      )}
     </main>
   );
 }

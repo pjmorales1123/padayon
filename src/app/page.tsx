@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppNavigation from "@/components/navigation/AppNavigation";
+import { buildAppHref } from "@/lib/navigation";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -33,13 +34,15 @@ export default function Home() {
   const [seeding, setSeeding] = useState(false);
   const [seedingPersonas, setSeedingPersonas] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
+  const [personaResetResult, setPersonaResetResult] = useState<string | null>(null);
 
   const loadData = () => {
     fetch(`/api/profile?userId=${DEMO_USER_ID}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.user?.name) setName(d.user.name);
-      });
+      })
+      .catch(() => setName("Student"));
 
     fetch(`/api/library?userId=${DEMO_USER_ID}`)
       .then((r) => r.json())
@@ -55,7 +58,8 @@ export default function Home() {
           );
           setRecentTopics(topics.slice(0, 3));
         }
-      });
+      })
+      .catch(() => setSubjects([]));
   };
 
   useEffect(() => {
@@ -92,12 +96,22 @@ export default function Home() {
 
   const seedPersonas = async () => {
     setSeedingPersonas(true);
+    setPersonaResetResult(null);
     try {
-      await fetch("/api/seed-personas", {
+      const res = await fetch("/api/seed-personas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reset: true }),
       });
+      const data = (await res.json()) as { success?: boolean; error?: string };
+      if (res.ok && data.success) {
+        setPersonaResetResult("Reset complete");
+        loadData();
+      } else {
+        setPersonaResetResult(`Reset failed: ${data.error || `HTTP ${res.status}`}`);
+      }
+    } catch {
+      setPersonaResetResult("Reset failed. Make sure the backend is running.");
     } finally {
       setSeedingPersonas(false);
     }
@@ -150,13 +164,13 @@ export default function Home() {
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href="/demo"
+            href={buildAppHref("/demo", DEMO_USER_ID)}
             className="w-full sm:w-auto rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 text-lg font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition"
           >
             See the live demo
           </Link>
           <Link
-            href="/chat"
+            href={buildAppHref("/chat", DEMO_USER_ID)}
             className="w-full sm:w-auto rounded-2xl bg-white text-slate-700 border border-slate-300 px-8 py-4 text-lg font-semibold hover:bg-slate-50 transition"
           >
             Try the chat
@@ -192,13 +206,20 @@ export default function Home() {
                 See how PADAYON adapts when it already knows the student.
               </p>
             </div>
-            <button
-              onClick={seedPersonas}
-              disabled={seedingPersonas}
-              className="rounded-xl bg-white/10 hover:bg-white/20 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 transition"
-            >
-              {seedingPersonas ? "Preparing..." : "Reset personas"}
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={seedPersonas}
+                disabled={seedingPersonas}
+                className="rounded-xl bg-white/10 hover:bg-white/20 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 transition"
+              >
+                {seedingPersonas ? "Preparing..." : "Reset personas"}
+              </button>
+              {personaResetResult && (
+                <p className={`text-xs ${personaResetResult.startsWith("Reset complete") ? "text-green-200" : "text-red-200"}`}>
+                  {personaResetResult}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -210,7 +231,7 @@ export default function Home() {
             ].map((p) => (
               <Link
                 key={p.id}
-                href={`/demo?userId=${p.id}`}
+                href={buildAppHref("/demo", p.id)}
                 className={`block rounded-2xl ${p.color} border border-white/10 p-4 hover:bg-white/20 transition`}
               >
                 <div className="flex items-center gap-2 mb-2">
@@ -231,7 +252,7 @@ export default function Home() {
       <section className="max-w-5xl mx-auto px-4 pb-16">
         <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 shadow-sm">
           <div className="flex flex-col lg:flex-row gap-8 items-start">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h2 className="text-2xl font-bold text-slate-900 mb-3">
                 {greeting}, {name}.
               </h2>
@@ -240,13 +261,13 @@ export default function Home() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href="/demo"
+                  href={buildAppHref("/demo", DEMO_USER_ID)}
                   className="rounded-xl bg-blue-600 text-white px-5 py-3 font-semibold hover:bg-blue-700 transition"
                 >
                   Open Live Demo →
                 </Link>
                 <Link
-                  href="/chat"
+                  href={buildAppHref("/chat", DEMO_USER_ID)}
                   className="rounded-xl bg-white text-slate-700 border border-slate-300 px-5 py-3 font-semibold hover:bg-slate-50 transition"
                 >
                   Start chatting
@@ -265,7 +286,7 @@ export default function Home() {
                   {recentTopics.map((t) => (
                     <Link
                       key={t.id}
-                      href={`/topic/${t.id}`}
+                      href={buildAppHref(`/topic/${t.id}`, DEMO_USER_ID)}
                       className="block rounded-xl bg-slate-50 border border-slate-200 p-4 hover:border-blue-300 hover:bg-blue-50 transition"
                     >
                       <div className="font-semibold text-slate-800">
@@ -280,23 +301,23 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-3 max-w-2xl mx-auto">
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto">
           <Link
-            href="/library"
+            href={buildAppHref("/library", DEMO_USER_ID)}
             className="block rounded-xl bg-white border border-slate-200 p-4 text-center hover:shadow-md transition"
           >
             <div className="font-semibold text-slate-800">Library</div>
             <div className="text-sm text-slate-500">{subjects.length} subjects</div>
           </Link>
           <Link
-            href="/profile"
+            href={buildAppHref("/profile", DEMO_USER_ID)}
             className="block rounded-xl bg-white border border-slate-200 p-4 text-center hover:shadow-md transition"
           >
             <div className="font-semibold text-slate-800">Profile</div>
             <div className="text-sm text-slate-500">Your progress</div>
           </Link>
           <Link
-            href="/demo"
+            href={buildAppHref("/demo", DEMO_USER_ID)}
             className="block rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white border border-blue-600 p-4 text-center hover:shadow-md transition"
           >
             <div className="font-semibold">Live Demo</div>

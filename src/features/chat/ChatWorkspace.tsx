@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import NextImage from "next/image";
 import Link from "next/link";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import InteractiveMessage from "@/components/chat/InteractiveMessage";
-import type { InteractivePayload } from "@/lib/types";
+import type { InteractivePayload, AgentResponseRuntime } from "@/lib/types";
 import AppNavigation from "@/components/navigation/AppNavigation";
 import { consumeRequestId } from "./request-id";
 
@@ -28,8 +29,48 @@ const SUGGESTIONS = [
   "Show me a visual for photosynthesis",
 ];
 
+const MAX_UPLOAD_FILES = 10;
+const MAX_UPLOAD_SIZE_MB = 12;
+const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+const SLOW_REQUEST_MS = 8000;
+
 function generateId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function validateFiles(files: File[]): string | null {
+  if (files.length > MAX_UPLOAD_FILES) {
+    return `You can upload up to ${MAX_UPLOAD_FILES} files at once.`;
+  }
+  for (const file of files) {
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isImage && !isPdf) {
+      return `"${file.name}" is not supported. Please upload images or PDFs only.`;
+    }
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      return `"${file.name}" is too large. Maximum file size is ${MAX_UPLOAD_SIZE_MB} MB.`;
+    }
+  }
+  return null;
+}
+
+function runtimeBadgeLabel(runtime: AgentResponseRuntime | null): string | null {
+  if (!runtime) return null;
+  if (runtime.provider === "gemma" && !runtime.fallback) return "Gemma 4";
+  if (runtime.provider === "fireworks" && !runtime.fallback) return "Auto · primary";
+  return "Fallback · Fireworks";
+}
+
+function runtimeBadgeClass(runtime: AgentResponseRuntime | null): string {
+  if (!runtime) return "";
+  if (runtime.provider === "gemma" && !runtime.fallback) {
+    return "bg-purple-100 text-purple-800 border-purple-200";
+  }
+  if (runtime.fallback) {
+    return "bg-amber-100 text-amber-800 border-amber-200";
+  }
+  return "bg-blue-100 text-blue-700 border-blue-200";
 }
 
 export interface ChatWorkspaceProps {
@@ -55,7 +96,9 @@ export default function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [requestState, setRequestState] = useState<"idle" | "working" | "slow" | "error">("idle");
+  const [lastFailedPrompt, setLastFailedPrompt] = useState("");
+  const [lastRuntime, setLastRuntime] = useState<AgentResponseRuntime | null>(null);
   const [stepLabel, setStepLabel] = useState("Thinking...");
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -73,6 +116,9 @@ export default function ChatWorkspace({
   const autoSentRef = useRef(false);
   const inputRef = useRef(input);
   const initialRequestIdRef = useRef(initialRequestId);
+  const slowTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const busy = requestState !== "idle" || uploading;
 
   useEffect(() => {
     inputRef.current = input;
@@ -96,7 +142,14 @@ export default function ChatWorkspace({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, stepLabel, importProgress]);
+  }, [messages, stepLabel, importProgress, requestState]);
+
+  function clearSlowTimer() {
+    if (slowTimerRef.current) {
+      clearTimeout(slowTimerRef.current);
+      slowTimerRef.current = null;
+    }
+  }
 
   function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -125,11 +178,17 @@ export default function ChatWorkspace({
     const userMsg = (textOverride ?? inputRef.current).trim();
     if (!userMsg || sendingRef.current) return;
     sendingRef.current = true;
-    setLoading(true);
+    setRequestState("working");
+    setLastFailedPrompt("");
+    setLastRuntime(null);
 
     const reqId = consumeRequestId(initialRequestIdRef.current, () => generateId("req"));
     initialRequestIdRef.current = undefined;
     onRequestStart?.(reqId);
+
+    slowTimerRef.current = setTimeout(() => {
+      setRequestState("slow");
+    }, SLOW_REQUEST_MS);
 
     setInput("");
     if (!skipUserMessage) {
@@ -159,6 +218,10 @@ export default function ChatWorkspace({
         body: JSON.stringify({ userId, message: userMsg, requestId: reqId, imageUrl: imageUrlOverride, model }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      setLastRuntime(data.model_runtime || null);
       setMessages((prev) => [
         ...prev,
         {
@@ -172,16 +235,17 @@ export default function ChatWorkspace({
           interactive: data.interactive,
         },
       ]);
-    } catch {
+      setRequestState("idle");
+    } catch (err) {
       setInput(userMsg);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Something went wrong. Please try again." },
-      ]);
+      setLastFailedPrompt(userMsg);
+      setRequestState("error");
+      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setMessages((prev) => [...prev, { role: "assistant", content: message }]);
     } finally {
+      clearSlowTimer();
       cancelled = true;
       clearInterval(interval);
-      setLoading(false);
       setStepLabel("Thinking...");
       sendingRef.current = false;
       onRequestComplete?.(reqId);
@@ -225,14 +289,31 @@ export default function ChatWorkspace({
     return images;
   }
 
+  function resetFileInput() {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function showAssistantError(message: string) {
+    setMessages((prev) => [...prev, { role: "assistant", content: message }]);
+  }
+
   async function smartImportFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files);
+
+    const validationError = validateFiles(fileArray);
+    if (validationError) {
+      showAssistantError(validationError);
+      resetFileInput();
+      return;
+    }
+
     const imageFiles = fileArray.filter((f) => f.type.startsWith("image/"));
     const pdfFiles = fileArray.filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
 
     if (imageFiles.length === 0 && pdfFiles.length === 0) {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Please upload images or PDF files." }]);
+      showAssistantError("Please upload images or PDF files.");
+      resetFileInput();
       return;
     }
 
@@ -256,7 +337,7 @@ export default function ChatWorkspace({
       }
 
       if (allDataUrls.length === 0) {
-        setMessages((prev) => [...prev, { role: "assistant", content: "Could not process any pages. Try clearer images or a text-based PDF." }]);
+        showAssistantError("Could not process any pages. Try clearer images or a text-based PDF.");
         return;
       }
 
@@ -277,10 +358,7 @@ export default function ChatWorkspace({
 
       const combinedText = extractedParts.join("\n\n---\n\n").trim();
       if (!combinedText || combinedText.length < 20) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "Could not read enough text from these pages. Try taking clearer photos or typing the notes." },
-        ]);
+        showAssistantError("Could not read enough text from these pages. Try taking clearer photos or typing the notes.");
         return;
       }
 
@@ -297,15 +375,12 @@ export default function ChatWorkspace({
       send(combinedText, previewUrl, true);
     } catch (err) {
       console.error("Smart import failed", err);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Import failed. Please try again with fewer or clearer pages." },
-      ]);
+      showAssistantError("Import failed. Please try again with fewer or clearer pages.");
     } finally {
       setUploading(false);
       setImportProgress(null);
       setImagePreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetFileInput();
     }
   }
 
@@ -322,14 +397,11 @@ export default function ChatWorkspace({
       send(text, undefined, true);
     } catch (err) {
       console.error("Image upload failed", err);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Could not read the image. Try typing the notes instead." },
-      ]);
+      showAssistantError("Could not read the image. Try typing the notes instead.");
     } finally {
       setUploading(false);
       setImagePreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetFileInput();
     }
   }
 
@@ -357,6 +429,14 @@ export default function ChatWorkspace({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    const fileArray = Array.from(files);
+    const validationError = validateFiles(fileArray);
+    if (validationError) {
+      showAssistantError(validationError);
+      resetFileInput();
+      return;
+    }
+
     const first = files[0];
     if (files.length === 1 && first.type.startsWith("image/")) {
       // Legacy single-image path
@@ -364,10 +444,7 @@ export default function ChatWorkspace({
         const dataUrl = await compressImage(first, 1200, 0.7);
         await uploadImageDataUrl(dataUrl);
       } catch {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "Could not read the image. Please try again or type your notes." },
-        ]);
+        showAssistantError("Could not read the image. Please try again or type your notes.");
       }
       return;
     }
@@ -418,11 +495,14 @@ export default function ChatWorkspace({
     }
   }, [initialPrompt, autoSend, send]);
 
+  const runtimeLabel = runtimeBadgeLabel(lastRuntime);
+  const runtimeClass = runtimeBadgeClass(lastRuntime);
+
   return (
     <section aria-label="PADAYON chat workspace">
       {!embedded && (
         <div className="max-w-3xl mx-auto px-4 pt-4">
-          <AppNavigation userId={userId} busy={loading} />
+          <AppNavigation userId={userId} busy={busy} />
         </div>
       )}
 
@@ -438,6 +518,14 @@ export default function ChatWorkspace({
             <p className="text-xs text-slate-500">AI learning partner for Filipino students</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {runtimeLabel && (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${runtimeClass}`}
+                title={`Model: ${lastRuntime?.model || "unknown"}`}
+              >
+                {runtimeLabel}
+              </span>
+            )}
             {model === "gemma-4" && (
               <span
                 className={`hidden sm:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -458,7 +546,7 @@ export default function ChatWorkspace({
             )}
             <button
               onClick={createNewProfile}
-              disabled={loading || uploading}
+              disabled={busy}
               className="hidden sm:inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               title="Create a fresh student profile for testing"
             >
@@ -470,7 +558,7 @@ export default function ChatWorkspace({
               id="model-select"
               value={model}
               onChange={(e) => setModel(e.target.value as "auto" | "gemma-4")}
-              disabled={loading}
+              disabled={busy}
               className="text-sm rounded-xl border border-slate-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               title="Choose the AI model. Gemma 4 requires a configured endpoint and incurs hourly GPU cost while active."
             >
@@ -497,7 +585,7 @@ export default function ChatWorkspace({
                   <p className="text-sm font-medium text-purple-800 mb-3">“{initialPrompt}”</p>
                   <button
                     onClick={() => send(initialPrompt)}
-                    disabled={loading}
+                    disabled={busy}
                     className="rounded-xl bg-purple-600 text-white px-4 py-2 text-sm font-semibold hover:bg-purple-700 disabled:opacity-50"
                   >
                     Send prompt
@@ -519,7 +607,7 @@ export default function ChatWorkspace({
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    disabled={loading}
+                    disabled={busy}
                     className="rounded-full bg-white border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:border-blue-200 transition disabled:opacity-50"
                   >
                     {s}
@@ -541,9 +629,12 @@ export default function ChatWorkspace({
                 }`}
               >
                 {m.imageUrl && (
-                  <img
+                  <NextImage
                     src={m.imageUrl}
                     alt="Uploaded note"
+                    width={320}
+                    height={192}
+                    unoptimized
                     className="mb-2 rounded-xl max-h-48 object-cover border border-slate-200"
                   />
                 )}
@@ -583,7 +674,7 @@ export default function ChatWorkspace({
               </div>
             </div>
           ))}
-          {loading && (
+          {requestState === "working" && (
             <div className="flex justify-start">
               <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 max-w-[85%] shadow-sm">
                 <div className="flex items-center gap-3 text-slate-600">
@@ -597,12 +688,57 @@ export default function ChatWorkspace({
               </div>
             </div>
           )}
+          {requestState === "slow" && (
+            <div className="flex justify-start">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 max-w-[85%] shadow-sm">
+                <div className="flex items-start gap-3 text-amber-800">
+                  <span className="shrink-0 text-lg">⏳</span>
+                  <div>
+                    <p className="text-sm font-medium">Still working through your study pack.</p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      You can watch each step in the learning trail.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {requestState === "error" && (
+            <div className="flex justify-start">
+              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 max-w-[85%] shadow-sm">
+                <div className="flex items-start gap-3 text-red-800">
+                  <span className="shrink-0 text-lg">⚠️</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">Request failed</p>
+                    {lastFailedPrompt && (
+                      <button
+                        onClick={() => send(lastFailedPrompt)}
+                        disabled={busy}
+                        className="mt-2 inline-flex items-center rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Retry
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 
         {(imagePreview || importProgress) && (
           <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3 flex items-center gap-3">
-            {imagePreview && <img src={imagePreview} alt="Uploading" className="h-16 w-16 object-cover rounded-lg border border-slate-200" />}
+            {imagePreview && (
+              <NextImage
+                src={imagePreview}
+                alt="Uploading"
+                width={64}
+                height={64}
+                unoptimized
+                className="h-16 w-16 object-cover rounded-lg border border-slate-200"
+              />
+            )}
             <div className="text-sm text-blue-800 flex-1">
               <p className="font-medium">
                 {importProgress ? importProgress.label : "Reading your notes..."}
@@ -660,6 +796,22 @@ export default function ChatWorkspace({
           </div>
         )}
 
+        {requestState === "error" && lastFailedPrompt && (
+          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-red-800">Could not send your message</p>
+              <p className="text-xs text-red-600 truncate">“{lastFailedPrompt}”</p>
+            </div>
+            <button
+              onClick={() => send(lastFailedPrompt)}
+              disabled={busy}
+              className="shrink-0 rounded-lg bg-red-600 text-white px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
             ref={fileInputRef}
@@ -672,7 +824,7 @@ export default function ChatWorkspace({
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-400">
             <button
               onClick={openCamera}
-              disabled={loading || uploading}
+              disabled={busy}
               className="rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 transition"
               aria-label="Open camera"
               title="Open camera"
@@ -681,7 +833,7 @@ export default function ChatWorkspace({
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={loading || uploading}
+              disabled={busy}
               className="rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 transition"
               aria-label="Upload notes or PDF"
               title="Upload photos or PDF"
@@ -697,7 +849,7 @@ export default function ChatWorkspace({
             />
             <button
               onClick={() => send()}
-              disabled={loading || uploading || !input.trim()}
+              disabled={busy || !input.trim()}
               className="rounded-xl bg-blue-600 text-white px-4 py-2.5 font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:bg-slate-300 transition"
             >
               Send
