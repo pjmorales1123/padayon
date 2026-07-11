@@ -9,7 +9,7 @@ import {
   memoryAgent,
   visualDesignerAgent,
 } from "@/lib/agents";
-import { ChatMessage, MemoryUpdate, InteractivePayload } from "@/lib/types";
+import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack } from "@/lib/types";
 import { startRun, logStep } from "@/lib/agent-events";
 
 interface MaterialContent {
@@ -36,6 +36,7 @@ const VALID_INTENTS = new Set([
   "make_reviewer",
   "make_quiz",
   "make_story",
+  "make_visual",
   "retrieve_material",
   "continue_learning",
   "research_topics",
@@ -545,7 +546,7 @@ export async function POST(req: NextRequest) {
       content: message,
     });
 
-    // 7. Retrieve existing materials if retrieval intent
+    // 7. Retrieve existing materials if retrieval or visual intent
     let reply = "";
     let materials_created: string[] = [];
     let savedMaterials: Array<{ type: string; id: string }> = [];
@@ -553,13 +554,43 @@ export async function POST(req: NextRequest) {
     let interactive: InteractivePayload | null = null;
 
     const isRetrieval = RETRIEVAL_INTENTS.includes(classification.intent);
+    const isVisualRequest = classification.intent === "make_visual";
 
-    if (isRetrieval) {
+    async function loadMaterialsForTopic(topicId: string) {
+      const { data } = await supabaseAdmin!.from("materials").select("*").eq("topic_id", topicId);
+      return data || [];
+    }
+
+    function buildStudyPackFromMaterials(materials: Array<{ type: string; content: MaterialContent }>): StudyPack | null {
+      const cleanNotes = materials.find((m) => m.type === "clean_notes")?.content?.text || "";
+      const reviewer = materials.find((m) => m.type === "reviewer")?.content?.text || "";
+      const summary = materials.find((m) => m.type === "summary")?.content?.text || "";
+      const story = materials.find((m) => m.type === "story")?.content?.text || "";
+      const flashcards = materials.find((m) => m.type === "flashcards")?.content?.flashcards || [];
+      const quizRaw = materials.find((m) => m.type === "quiz")?.content?.quiz || [];
+      const quiz = quizRaw.map((q) => ({
+        question: q.question || "",
+        choices: q.choices || [],
+        answer: q.answer || "",
+        explanation: q.explanation || "",
+      }));
+      if (!cleanNotes && !summary && flashcards.length === 0 && quiz.length === 0) return null;
+      return { clean_notes: cleanNotes, reviewer, summary, story, flashcards, quiz };
+    }
+
+    if (isRetrieval || isVisualRequest) {
       logStep(requestId, "retrieve", `Retrieving saved materials for ${classification.topic}`, "running");
-      const { data: materials } = await supabaseAdmin!
-        .from("materials")
-        .select("*")
-        .eq("topic_id", topic.id);
+      const materials = await loadMaterialsForTopic(topic.id);
+
+      if (isVisualRequest) {
+        const existingStudyPack = buildStudyPackFromMaterials(materials);
+        if (existingStudyPack) {
+          studyPack = existingStudyPack;
+          logStep(requestId, "retrieve", "Loaded existing study pack for visual generation", "done");
+        } else {
+          logStep(requestId, "retrieve", "No existing study pack — will create materials first", "done");
+        }
+      }
 
       const requestedType = mapIntentToType(classification.intent, message);
 
@@ -600,7 +631,15 @@ export async function POST(req: NextRequest) {
     }
 
     const shouldCreateMaterials =
-      classification.intent === "create_study_pack" || reply.includes("Let me create them");
+      classification.intent === "create_study_pack" ||
+      (isVisualRequest && !studyPack) ||
+      reply.includes("Let me create them");
+
+    // Visual requests: if we already have materials, reply quickly and let the HTML widget do the teaching.
+    if (isVisualRequest && studyPack && !reply) {
+      reply = `Here's an interactive visual for **${classification.topic}**. Tap the cards to flip them!`;
+    }
+
     const shouldTeach = !reply && !shouldCreateMaterials;
 
     let profileRow: Record<string, unknown> | null = null;
@@ -680,7 +719,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!interactive && shouldCreateMaterials && topic) {
-      interactive = visualDesignerAgent(message, topic.id, topic.title, studyPack, classification);
+      interactive = await visualDesignerAgent(message, topic.id, topic.title, studyPack, classification, preferredModel);
     }
 
     if (shouldTeach) {
@@ -689,11 +728,16 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, undefined, teachingQuizResult, classification, preferredModel);
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack || undefined, teachingQuizResult, classification, preferredModel);
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length });
       if (!reply || reply.length < 10) {
         reply = `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;
       }
+    }
+
+    // Visual requests: ensure the HTML widget is generated even if we only taught or had existing materials.
+    if (isVisualRequest && topic && !interactive && studyPack) {
+      interactive = await visualDesignerAgent(message, topic.id, topic.title, studyPack, classification, preferredModel);
     }
 
     // 8. Save AI reply

@@ -54,9 +54,11 @@ function keywordClassification(message: string): Classification {
 
   const retrieval = lower.includes("flashcard") || lower.includes("quiz") || lower.includes("reviewer") || lower.includes("review") || lower.includes("show my") || lower.includes("my flashcards") || lower.includes("my quiz") || lower.includes("my notes") || lower.includes("summary");
   const explicitCreation = lower.includes("create") || lower.includes("make") || lower.includes("build") || lower.includes("organize") || lower.includes("study pack") || lower.includes("notes");
+  const visual = /visual|diagram|infographic|chart|picture|illustration|drawing|graph|image of|show me a|paano magdrawing/i.test(lower);
   const research = /didn't listen|missed the lesson|wala ko nakadungog|wala ko namatikdan|related topics|what did we talk about|what did you discuss|what topics|unsa among gisaysay|unsa among gipasabot/i.test(lower);
   let intent: Classification["intent"] = "teach_topic";
   if (research) intent = "research_topics";
+  else if (visual) intent = "make_visual";
   else if (retrieval) intent = "retrieve_material";
   else if (explicitCreation) intent = "create_study_pack";
 
@@ -127,13 +129,14 @@ Analyze the student input and return ONLY valid JSON with exactly these fields:
 - subject (Science, Math, English, Filipino, ICT, Social Studies, MAPEH, or Unknown)
 - subcategory
 - topic (a short, specific topic title)
-- intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_story, retrieve_material, continue_learning, research_topics, unknown)
+- intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_story, make_visual, retrieve_material, continue_learning, research_topics, unknown)
 - language_detected (English, Filipino, Cebuano, Cebuano-English mix, Filipino-English mix, Other)
 - confidence (number 0.0-1.0)
 
 Intent rules:
 - Use "teach_topic" when the student is asking a question, wants an explanation, or is just chatting about a topic (e.g., "What is meter?", "explain ezra pound", "let's play a game").
 - Use "create_study_pack" when the student provides messy notes, a list of keywords, or study material to organize (e.g., "photosynthesis chlorophyll sunlight CO2", "irony sarcasm dramatic irony", or a pasted list of terms). Treat keyword dumps and pasted notes as material to organize, not as a question.
+- Use "make_visual" when the student explicitly asks for a visual, diagram, infographic, chart, picture, or illustration of a topic (e.g., "show me a visual for photosynthesis", "diagram of cellular respiration", "infographic for quadratic equations").
 - Use "retrieve_material" ONLY when the student explicitly asks to see existing saved materials (e.g., "show my flashcards", "where is my quiz", "my summary"). Do NOT use it for general questions like "look at" or "tell me about".
 - Use "continue_learning" when the student clearly returns to a previous topic (e.g., "continue", "go back to").
 - Use "research_topics" when the student missed a lesson, is unsure what topic to study, or asks what was discussed (e.g., "I didn't listen earlier, what did we talk about?", "wala ko nakadungog sa lesson ganina", "show me related topics", "what topics are in this subject?").
@@ -475,20 +478,153 @@ Current profile: ${JSON.stringify(profile)}`;
   };
 }
 
-export function visualDesignerAgent(
+function buildFastHtmlVisual(
+  topic: string,
+  studyPack: StudyPack,
+  classification: Classification
+): { title: string; html: string } {
+  const lang = classification.language_detected || "English";
+  const keyPoints = (studyPack.clean_notes || studyPack.summary || `Learn about ${topic}.`)
+    .split(/\.|\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 10 && s.length < 120)
+    .slice(0, 4);
+
+  const cards = (studyPack.flashcards || []).slice(0, 3).map((c, i) => `
+    <div class="flip-card" onclick="this.classList.toggle('flipped')">
+      <div class="flip-card-inner">
+        <div class="flip-card-front">${escapeHtml(c.front)}</div>
+        <div class="flip-card-back">${escapeHtml(c.back)}</div>
+      </div>
+    </div>`).join("");
+
+  const svgDiagram = topic.toLowerCase().includes("photosynthesis") ? `
+    <svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
+      <rect x="10" y="40" width="300" height="90" rx="12" fill="#e8f5e9" stroke="#4caf50" stroke-width="2"/>
+      <text x="160" y="25" text-anchor="middle" font-size="14" fill="#2e7d32" font-weight="600">Leaf cross-section</text>
+      <circle cx="80" cy="85" r="22" fill="#fff9c4" stroke="#fbc02d" stroke-width="2"/>
+      <text x="80" y="90" text-anchor="middle" font-size="10" fill="#f57f17">Sunlight</text>
+      <rect x="140" y="70" width="80" height="50" rx="8" fill="#c8e6c9" stroke="#388e3c" stroke-width="2"/>
+      <text x="180" y="98" text-anchor="middle" font-size="10" fill="#1b5e20">Chloroplast</text>
+      <path d="M105 85 L140 90" stroke="#f57f17" stroke-width="2" marker-end="url(#arrow)"/>
+      <path d="M225 90 L260 90" stroke="#4caf50" stroke-width="2" marker-end="url(#arrow)"/>
+      <text x="270" y="95" font-size="10" fill="#1b5e20">O₂ + glucose</text>
+      <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#666"/></marker></defs>
+    </svg>` : `
+    <svg viewBox="0 0 320 120" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
+      <rect x="20" y="20" width="280" height="80" rx="16" fill="#e3f2fd" stroke="#2196f3" stroke-width="2"/>
+      <text x="160" y="65" text-anchor="middle" font-size="14" fill="#0d47a1" font-weight="600">${escapeHtml(topic)}</text>
+      <text x="160" y="85" text-anchor="middle" font-size="10" fill="#1565c0">Visual study guide</text>
+    </svg>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(topic)} Visual</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);padding:16px;color:#0f172a}
+  .card{max-width:760px;margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.08);overflow:hidden}
+  .header{background:linear-gradient(90deg,#0ea5e9,#2563eb);color:#fff;padding:18px 20px}
+  .header h1{font-size:1.25rem;font-weight:700}
+  .header span{font-size:0.75rem;opacity:0.9}
+  .body{padding:18px 20px}
+  .diagram-wrap{background:#f8fafc;border-radius:14px;padding:12px;margin-bottom:16px;border:1px solid #e2e8f0}
+  .points{display:grid;gap:10px;margin-bottom:16px}
+  .point{display:flex;align-items:flex-start;gap:10px;background:#f1f5f9;padding:10px 12px;border-radius:10px;border-left:4px solid #0ea5e9}
+  .point::before{content:"✓";font-weight:700;color:#0ea5e9;flex-shrink:0}
+  .point p{font-size:0.9rem;line-height:1.4}
+  .flip-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+  .flip-card{perspective:800px;height:120px;cursor:pointer}
+  .flip-card-inner{position:relative;width:100%;height:100%;transition:transform 0.5s;transform-style:preserve-3d;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+  .flip-card.flipped .flip-card-inner{transform:rotateY(180deg)}
+  .flip-card-front,.flip-card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;display:flex;align-items:center;justify-content:center;padding:10px;border-radius:12px;text-align:center;font-size:0.85rem}
+  .flip-card-front{background:#dbeafe;color:#1e40af;font-weight:600}
+  .flip-card-back{background:#1e40af;color:#fff;transform:rotateY(180deg)}
+  .tip{background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:12px;font-size:0.85rem;color:#92400e}
+  .tip strong{color:#78350f}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <h1>${escapeHtml(topic)}</h1>
+    <span>Visual guide · ${escapeHtml(lang)}</span>
+  </div>
+  <div class="body">
+    <div class="diagram-wrap">${svgDiagram}</div>
+    <div class="points">
+      ${keyPoints.map((p) => `<div class="point"><p>${escapeHtml(p)}</p></div>`).join("")}
+    </div>
+    <div class="flip-cards">${cards}</div>
+    <div class="tip"><strong>Study tip:</strong> Click each card to flip it and test yourself. Say the answer out loud before checking.</div>
+  </div>
+</div>
+</body>
+</html>`;
+
+  return { title: `${topic} Visual`, html };
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+export async function htmlVisualAgent(
+  topic: string,
+  studyPack: StudyPack,
+  classification: Classification,
+  model: ModelPreference = "auto"
+): Promise<{ title: string; html: string } | null> {
+  // Fast path: build a reliable visual instantly without LLM so the demo never times out.
+  const fast = buildFastHtmlVisual(topic, studyPack, classification);
+  if (fast.html.length > 200) return fast;
+
+  // Fallback LLM path if study pack is unusable.
+  const prompt = `Create a short HTML visual for ${topic}. Return JSON with title and html.`;
+  const content = await callFireworks(
+    [
+      { role: "system", content: "Return only valid JSON with title and html." },
+      { role: "user", content: prompt },
+    ],
+    true,
+    1500,
+    model
+  );
+  const parsed = extractJson<{ title: string; html: string }>(content);
+  if (parsed?.html && parsed.html.trim().length > 50) {
+    // Sanitize: ensure it's a complete document and strip potentially harmful tags.
+    let html = parsed.html.trim();
+    if (!html.toLowerCase().startsWith("<!doctype")) {
+      html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${parsed.title}</title>\n<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:16px;}</style>\n</head>\n<body>\n${html}\n</body>\n</html>`;
+    }
+    return { title: parsed.title, html };
+  }
+  return null;
+}
+
+export async function visualDesignerAgent(
   message: string,
   topicId: string,
   topicTitle: string,
   studyPack: StudyPack | null | undefined,
-  classification: Classification
-): InteractivePayload | null {
+  classification: Classification,
+  model: ModelPreference = "auto"
+): Promise<InteractivePayload | null> {
   if (!studyPack) return null;
 
   const lower = message.toLowerCase();
   const wantsFlashcards = classification.intent === "make_flashcards" || /flashcard|flash card|card/i.test(lower);
   const wantsQuiz = classification.intent === "make_quiz" || /quiz|test|question/i.test(lower);
   const wantsTable = /table|compare|comparison|difference|versus|vs\.?/i.test(lower);
-  const wantsVisual = /visual|diagram|picture|image|infographic|chart|graphic/i.test(lower);
+  const wantsVisual = /visual|diagram|picture|image|infographic|chart|graphic|show me|illustrate/i.test(lower);
 
   if (wantsFlashcards && studyPack.flashcards && studyPack.flashcards.length > 0) {
     return {
@@ -538,21 +674,14 @@ export function visualDesignerAgent(
   }
 
   if (wantsVisual) {
-    const cards: Array<{ icon: string; title: string; body: string }> = [];
-    if (studyPack.flashcards) {
-      studyPack.flashcards.slice(0, 4).forEach((c) => {
-        cards.push({ icon: "💡", title: c.front, body: c.back });
-      });
-    }
-    if (cards.length === 0 && studyPack.summary) {
-      cards.push({ icon: "📝", title: "Summary", body: studyPack.summary });
-    }
-    if (cards.length > 0) {
+    const htmlResult = await htmlVisualAgent(topicTitle, studyPack, classification, model);
+    if (htmlResult) {
       return {
-        type: "info_cards",
+        type: "html_visual",
         topic: topicTitle,
         topicId,
-        cards,
+        title: htmlResult.title,
+        html: htmlResult.html,
       };
     }
   }

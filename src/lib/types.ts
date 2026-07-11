@@ -140,9 +140,18 @@ export interface InteractiveStudyPackActions {
   actions: Array<{ label: string; materialType: string }>;
 }
 
+export interface InteractiveHtmlVisual {
+  type: "html_visual";
+  topic: string;
+  topicId: string;
+  title: string;
+  html: string;
+}
+
 export type InteractivePayload =
   | InteractiveFlashcards
   | InteractiveQuiz
   | InteractiveInfoCards
   | InteractiveComparisonTable
-  | InteractiveStudyPackActions;
+  | InteractiveStudyPackActions
+  | InteractiveHtmlVisual;

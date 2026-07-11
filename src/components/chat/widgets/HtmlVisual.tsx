@@ -1,0 +1,70 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+interface HtmlVisualProps {
+  topic: string;
+  title: string;
+  html: string;
+}
+
+export default function HtmlVisual({ topic, title, html }: HtmlVisualProps) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(320);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    const resize = () => {
+      try {
+        const body = doc.body;
+        const htmlEl = doc.documentElement;
+        const newHeight = Math.max(
+          body?.scrollHeight || 0,
+          htmlEl?.scrollHeight || 0,
+          320
+        );
+        setHeight(Math.min(newHeight + 24, 720));
+      } catch {
+        // cross-origin or parsing issue; keep default
+      }
+    };
+
+    const timer = setTimeout(resize, 100);
+    const interval = setInterval(resize, 500);
+
+    iframe.onload = resize;
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [html]);
+
+  return (
+    <div className="w-full rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+      <div className="px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-slate-100 flex items-center justify-between">
+        <p className="text-xs font-semibold text-indigo-900 truncate">{title}</p>
+        <span className="text-[10px] text-indigo-600/70 uppercase tracking-wide">Visual · {topic}</span>
+      </div>
+      <div className="w-full bg-white">
+        <iframe
+          ref={iframeRef}
+          title={title}
+          className="w-full border-0"
+          style={{ height, minHeight: 320 }}
+          sandbox="allow-scripts"
+          scrolling="no"
+        />
+      </div>
+    </div>
+  );
+}

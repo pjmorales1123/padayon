@@ -8,6 +8,7 @@ const MiniQuiz = dynamic(() => import("./widgets/MiniQuiz"), { ssr: false });
 const InfoCards = dynamic(() => import("./widgets/InfoCards"), { ssr: false });
 const ComparisonTable = dynamic(() => import("./widgets/ComparisonTable"), { ssr: false });
 const StudyPackActions = dynamic(() => import("./widgets/StudyPackActions"), { ssr: false });
+const HtmlVisual = dynamic(() => import("./widgets/HtmlVisual"), { ssr: false });
 
 interface InteractiveMessageProps {
   payload: InteractivePayload;
@@ -39,6 +40,8 @@ export default function InteractiveMessage({ payload, userId }: InteractiveMessa
           actions={payload.actions}
         />
       );
+    case "html_visual":
+      return <HtmlVisual topic={payload.topic} title={payload.title} html={payload.html} />;
     default:
       return null;
   }
