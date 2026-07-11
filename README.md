@@ -29,11 +29,11 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 
 ## How it uses AMD / Fireworks / Gemma
 
-- **AI Runtime:** Fireworks AI API — Fireworks is an AMD partner and hosts fast, serverless models on AMD infrastructure, used here as the reliable production runtime.
-- **Default Models:** `deepseek-v4-flash` / `kimi-k2p5` — fast, serverless Fireworks models that power the agent pipeline and fallback.
-- **Gemma Toggle:** The chat UI lets you switch to **Gemma 4** when a Gemma endpoint is available (Fireworks on-demand or AMD Developer Cloud GPU pod).
-- **Architecture:** Separate agent prompts sent to the model for classification, curriculum alignment, material creation, teaching, and memory updates.
-- **Fallback:** If Gemma is unreachable, PADAYON automatically falls back to the Fireworks serverless model so the demo never breaks. The UI badge reads `Fallback · Fireworks` and never presents fallback as Gemma.
+- **Primary Model:** **Gemma 4 31B Instruct** via Fireworks AI. Fireworks is an AMD partner and runs Gemma inference on AMD-powered infrastructure, satisfying the hackathon's AMD compute requirement.
+- **AI Runtime:** Fireworks AI API — the production runtime for all seven agents (classifier, curriculum, organizer, material creator, teacher, assessment, memory).
+- **Fallback Models:** `deepseek-v4-flash` / `kimi-k2p5` — fast, serverless Fireworks models that take over automatically if the Gemma endpoint is scaled down or unavailable, keeping the demo stable.
+- **Model Toggle:** The chat UI defaults to **Gemma 4** and also lets you switch to **Gemma 3** or **Auto** (serverless fallback). The runtime badge always shows the actual model provider (`Gemma 4 · AMD/Fireworks`, `Auto · Fireworks`, or `Fallback · Fireworks`).
+- **AMD Developer Cloud:** The architecture is also designed to accept a self-hosted Gemma endpoint on an AMD GPU pod via `GEMMA_4_ENDPOINT` when available.
 
 ## Agent Architecture
 

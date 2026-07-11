@@ -56,8 +56,8 @@ function validateFiles(files: File[]): string | null {
 
 function runtimeBadgeLabel(runtime: AgentResponseRuntime | null): string | null {
   if (!runtime) return null;
-  if (runtime.provider === "gemma" && !runtime.fallback) return "Gemma 4";
-  if (runtime.provider === "fireworks" && !runtime.fallback) return "Auto · primary";
+  if (runtime.provider === "gemma" && !runtime.fallback) return "Gemma 4 · AMD/Fireworks";
+  if (runtime.provider === "fireworks" && !runtime.fallback) return "Auto · Fireworks";
   return "Fallback · Fireworks";
 }
 
@@ -75,7 +75,7 @@ function runtimeBadgeClass(runtime: AgentResponseRuntime | null): string {
 export interface ChatWorkspaceProps {
   userId: string;
   topicId?: string;
-  initialModel?: "auto" | "gemma-4";
+  initialModel?: "auto" | "gemma-3" | "gemma-4";
   initialPrompt?: string;
   autoSend?: boolean;
   initialRequestId?: string;
@@ -88,7 +88,7 @@ export interface ChatWorkspaceProps {
 export default function ChatWorkspace({
   userId,
   topicId,
-  initialModel = "auto",
+  initialModel = "gemma-4",
   initialPrompt = "",
   autoSend = false,
   initialRequestId,
@@ -106,7 +106,7 @@ export default function ChatWorkspace({
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; label: string } | null>(null);
-  const [model, setModel] = useState<"auto" | "gemma-4">(initialModel);
+  const [model, setModel] = useState<"auto" | "gemma-3" | "gemma-4">(initialModel);
   const [modelStatus, setModelStatus] = useState<{ gemma3?: boolean; gemma4?: boolean }>({});
   const [skipHistory, setSkipHistory] = useState(startFresh);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -577,22 +577,22 @@ export default function ChatWorkspace({
                 {runtimeLabel}
               </span>
             )}
-            {model === "gemma-4" && (
+            {(model === "gemma-4" || model === "gemma-3") && (
               <span
                 className={`hidden sm:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                  modelStatus.gemma4 ? "bg-purple-100 text-purple-800" : "bg-amber-100 text-amber-800"
+                  modelStatus.gemma4 || modelStatus.gemma3 ? "bg-purple-100 text-purple-800" : "bg-amber-100 text-amber-800"
                 }`}
                 title={
-                  modelStatus.gemma4
-                    ? "Gemma 4 endpoint configured. On-demand deployment incurs hourly GPU cost while active."
-                    : "Gemma 4 endpoint not configured — will fall back to serverless"
+                  modelStatus.gemma4 || modelStatus.gemma3
+                    ? "Gemma endpoint configured. Powered by AMD + Fireworks AI."
+                    : "Gemma endpoint not configured — falling back to Fireworks serverless"
                 }
               >
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current"></span>
                 </span>
-                {modelStatus.gemma4 ? "Gemma 4 active" : "Fallback"}
+                {modelStatus.gemma4 || modelStatus.gemma3 ? `${model === "gemma-4" ? "Gemma 4" : "Gemma 3"} · AMD/Fireworks` : "Fallback"}
               </span>
             )}
             <button
@@ -621,13 +621,14 @@ export default function ChatWorkspace({
             <select
               id="model-select"
               value={model}
-              onChange={(e) => setModel(e.target.value as "auto" | "gemma-4")}
+              onChange={(e) => setModel(e.target.value as "auto" | "gemma-3" | "gemma-4")}
               disabled={busy}
               className="text-sm rounded-xl border border-slate-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              title="Choose the AI model. Gemma 4 requires a configured endpoint and incurs hourly GPU cost while active."
+              title="Choose the AI model. Gemma runs on AMD infrastructure through Fireworks AI."
             >
+              <option value="gemma-4">Gemma 4 · AMD/Fireworks</option>
+              <option value="gemma-3">Gemma 3 · AMD/Fireworks</option>
               <option value="auto">Auto (DeepSeek/Kimi)</option>
-              <option value="gemma-4">Gemma 4 (demo only — paid)</option>
             </select>
           </div>
         </header>

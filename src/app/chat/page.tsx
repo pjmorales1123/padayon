@@ -19,10 +19,11 @@ interface Topic {
 function ChatPageInner() {
   const searchParams = useSearchParams();
   const userId = searchParams?.get("userId") || DEMO_USER_ID;
-  const modelParam = searchParams?.get("model") as "auto" | "gemma-4" | null;
-  const initialModel = ["auto", "gemma-4"].includes(modelParam || "")
-    ? (modelParam as "auto" | "gemma-4")
-    : "auto";
+  const modelParam = searchParams?.get("model") as "auto" | "gemma-3" | "gemma-4" | null;
+  const validModels = ["auto", "gemma-3", "gemma-4"];
+  const initialModel = validModels.includes(modelParam || "")
+    ? (modelParam as "auto" | "gemma-3" | "gemma-4")
+    : "gemma-4";
   const initialPrompt = searchParams?.get("prompt") || undefined;
   const autoSend = searchParams?.get("autoSend") === "1";
   const initialRequestId = searchParams?.get("requestId") || undefined;

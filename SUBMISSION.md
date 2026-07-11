@@ -50,7 +50,7 @@ Record a 2–3 minute screen demo using the live app:
 https://github.com/pjmorales1123/padayon
 
 ## Demo Application URL
-https://courtesy-bacon-post-internet.trycloudflare.com
+https://padayon-theta.vercel.app
 
 > Note: Cloudflare quick tunnels are temporary. For a permanent demo link, deploy to Vercel or run the Docker container on a persistent host.
 

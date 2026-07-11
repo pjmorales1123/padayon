@@ -113,6 +113,10 @@ export default function Home() {
       <section className="max-w-5xl mx-auto px-4 pt-10 pb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 text-purple-800 px-3 py-1 text-xs font-semibold mb-2">
+              <span>⚡</span>
+              Gemma 4 · AMD/Fireworks
+            </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">PADAYON</h1>
             <p className="text-slate-500">AI study partner for Filipino students</p>
           </div>
@@ -152,13 +156,13 @@ export default function Home() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href={`${buildAppHref("/chat", activeUserId)}&new=1`}
+                  href={`${buildAppHref("/chat", activeUserId)}&new=1&model=gemma-4`}
                   className="rounded-xl bg-blue-600 text-white px-6 py-3 font-semibold hover:bg-blue-700 transition"
                 >
                   Start studying →
                 </Link>
                 <Link
-                  href={`${buildAppHref("/demo", activeUserId)}&new=1`}
+                  href={`${buildAppHref("/demo", activeUserId)}&new=1&model=gemma-4`}
                   className="rounded-xl bg-white text-slate-700 border border-slate-300 px-6 py-3 font-semibold hover:bg-slate-50 transition"
                 >
                   See Live Demo
@@ -226,7 +230,7 @@ export default function Home() {
           {DEMO_PERSONAS.map((p) => (
             <Link
               key={p.id}
-              href={buildAppHref("/demo", p.id)}
+              href={`${buildAppHref("/demo", p.id)}&model=gemma-4`}
               className="rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white p-5 hover:shadow-lg transition"
             >
               <div className="flex items-center gap-2 mb-2">

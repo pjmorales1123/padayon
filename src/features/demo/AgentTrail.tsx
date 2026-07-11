@@ -190,13 +190,14 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
     <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-slate-100">
       <div className="shrink-0 border-b border-slate-800 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold truncate">Backend Agents Monitor</h2>
-          <span className="rounded-full bg-green-900 px-2 py-1 text-xs font-medium text-green-300 shrink-0">
-            ● live
+          <h2 className="text-lg font-bold truncate">Backend Agents</h2>
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-900/60 px-2 py-1 text-xs font-medium text-green-300 shrink-0">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+            live
           </span>
         </div>
         <p className="mt-1 text-xs text-slate-400 truncate">
-          Request ID: <code className="text-slate-300">{requestId}</code>
+          Request: <code className="text-slate-300">{requestId.slice(0, 20)}…</code>
         </p>
         <div className="mt-3">
           <div className="mb-1 flex justify-between text-xs text-slate-400">

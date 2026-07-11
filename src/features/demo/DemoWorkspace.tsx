@@ -22,6 +22,14 @@ const MOBILE_TABS: { key: MobileTab; label: string }[] = [
   { key: "agents", label: "Agents" },
 ];
 
+const JUDGE_PROMPTS = [
+  "Explain photosynthesis like I'm 10",
+  "Make flashcards for photosynthesis",
+  "Quiz me on photosynthesis",
+  "Unsa ang photosynthesis? Dili ko kasabot sa English.",
+  "I already know photosynthesis makes glucose. Explain the Calvin cycle in depth.",
+];
+
 export default function DemoWorkspace({ initialUserId, startFresh = false }: DemoWorkspaceProps) {
   const router = useRouter();
   const [userId, setUserId] = useState(initialUserId);
@@ -33,6 +41,12 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
   const [autoSend, setAutoSend] = useState(false);
   const [promptKey, setPromptKey] = useState(0);
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
+
+  const modelParam =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("model")
+      : null;
+  const initialModel = modelParam === "gemma-3" ? "gemma-3" : "gemma-4";
 
   if (userId !== initialUserId) {
     setUserId(initialUserId);
@@ -101,11 +115,18 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
           </div>
           <div className="min-w-0">
             <h1 className="font-bold text-slate-900 truncate">PADAYON Demo</h1>
-            <p className="text-xs text-slate-500 truncate">Learner summary · Chat · Live agent trail</p>
+            <p className="text-xs text-slate-500 truncate">Profile · Chat · Agent pipeline</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-medium text-purple-800">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-purple-600"></span>
+            </span>
+            Gemma 4 ready
+          </span>
           <select
             aria-label="Persona"
             value={userId}
@@ -188,7 +209,7 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
           <ChatWorkspace
             key={`${userId}-${promptKey}`}
             embedded
-            initialModel="auto"
+            initialModel={initialModel}
             userId={userId}
             initialPrompt={initialPrompt}
             autoSend={autoSend}
@@ -197,6 +218,21 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
             onRequestStart={setActiveRequestId}
             onRequestComplete={handleRequestComplete}
           />
+          <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Judge prompts</p>
+            <div className="flex flex-wrap gap-2">
+              {JUDGE_PROMPTS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => sendPersonaPrompt(p)}
+                  disabled={activeRequestId !== null}
+                  className="text-xs rounded-full bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 px-3 py-1.5 border border-slate-200 transition disabled:opacity-50"
+                >
+                  {p.length > 45 ? `${p.slice(0, 45)}…` : p}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className={`${panelClass("agents")} min-h-0 overflow-hidden flex flex-col gap-2`}>
