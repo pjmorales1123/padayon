@@ -670,7 +670,6 @@ export async function POST(req: NextRequest) {
         { topic_id: topic.id, type: "quiz", title: "Quiz", content: { quiz: studyPack.quiz } },
         { topic_id: topic.id, type: "summary", title: "Summary", content: { text: studyPack.summary } },
         ...(studyPack.story ? [{ topic_id: topic.id, type: "story", title: "Story", content: { text: studyPack.story } }] : []),
-        ...(imageUrl ? [{ topic_id: topic.id, type: "image_notes", title: "Uploaded Image", content: { image_url: imageUrl } }] : []),
       ];
 
       const { data: existingMaterials } = await supabaseAdmin!
@@ -718,6 +717,45 @@ export async function POST(req: NextRequest) {
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz\n✓ Summary${studyPack.story ? "\n✓ Story" : ""}`;
+      }
+    }
+
+    if (imageUrl) {
+      const { data: existingImageMaterial } = await supabaseAdmin!
+        .from("materials")
+        .select("id, type")
+        .eq("topic_id", topic.id)
+        .eq("type", "image_notes")
+        .maybeSingle();
+
+      if (existingImageMaterial?.id) {
+        const { error } = await supabaseAdmin!
+          .from("materials")
+          .update({ title: "Uploaded Image", content: { image_url: imageUrl } })
+          .eq("id", existingImageMaterial.id);
+
+        if (error) {
+          console.error("Image material update error:", error);
+        } else {
+          savedMaterials = savedMaterials.filter((material) => material.type !== "image_notes");
+          savedMaterials.push({ type: "image_notes", id: existingImageMaterial.id });
+        }
+      } else {
+        const { data: insertedImageMaterial, error } = await supabaseAdmin!
+          .from("materials")
+          .insert({ topic_id: topic.id, type: "image_notes", title: "Uploaded Image", content: { image_url: imageUrl } })
+          .select("id, type")
+          .single();
+
+        if (error) {
+          console.error("Image material insert error:", error);
+        } else if (insertedImageMaterial) {
+          savedMaterials.push({ type: insertedImageMaterial.type, id: insertedImageMaterial.id });
+        }
+      }
+
+      if (!materials_created.includes("image_notes")) {
+        materials_created.push("image_notes");
       }
     }
 

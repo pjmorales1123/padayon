@@ -60,6 +60,10 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
     setPromptKey((k) => k + 1);
   };
 
+  const handleRequestComplete = () => {
+    setRefreshKey((k) => k + 1);
+  };
+
   const handleReset = async () => {
     setResetState("working");
     setResetError(null);
@@ -178,7 +182,7 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
               autoSend={autoSend}
               initialRequestId={activeRequestId ?? undefined}
               onRequestStart={setActiveRequestId}
-              onRequestComplete={setActiveRequestId}
+              onRequestComplete={handleRequestComplete}
             />
           </div>
 

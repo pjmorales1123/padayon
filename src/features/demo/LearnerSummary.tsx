@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getRecentActivity, type LibrarySubjectActivitySource } from "./recent-activity";
 
 interface LearnerSummaryProps {
   userId: string;
@@ -16,7 +17,7 @@ interface ProfileData {
 }
 
 interface LibraryData {
-  subjects?: Array<{ topics?: unknown[] }> | null;
+  subjects?: LibrarySubjectActivitySource[] | null;
 }
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
@@ -123,6 +124,7 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
     ) ?? 0;
 
   const hasHistory = topicCount > 0;
+  const recentActivity = getRecentActivity(library?.subjects);
 
   return (
     <div className="h-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -142,6 +144,17 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Topics studied</dt>
           <dd className="text-sm text-slate-800">{topicCount}</dd>
         </div>
+        {recentActivity && (
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent activity</dt>
+            <dd className="border-l-2 border-blue-200 pl-2 text-sm text-slate-800">
+              {recentActivity.message}
+              {recentActivity.topicTitle ? (
+                <span className="block text-xs text-slate-500">{recentActivity.topicTitle}</span>
+              ) : null}
+            </dd>
+          </div>
+        )}
       </dl>
 
       {!hasHistory && (

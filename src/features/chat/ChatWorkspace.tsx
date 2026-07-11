@@ -394,7 +394,7 @@ export default function ChatWorkspace({
         ...prev,
         { role: "user", content: `[Uploaded image]\n${text}`, imageUrl: dataUrl },
       ]);
-      send(text, undefined, true);
+      send(text, dataUrl, true);
     } catch (err) {
       console.error("Image upload failed", err);
       showAssistantError("Could not read the image. Try typing the notes instead.");
