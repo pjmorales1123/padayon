@@ -179,9 +179,10 @@ export default function ChatWorkspace({
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
-    });
+    // Force the flex item to shrink inside its overflow-hidden parent.
+    container.style.minHeight = "0px";
+    // Keep scroll pinned to bottom as new messages/streaming content appears.
+    container.scrollTop = container.scrollHeight;
   }, [messages, stepLabel, requestState]);
 
   function clearSlowTimer() {
@@ -539,8 +540,8 @@ export default function ChatWorkspace({
   const runtimeClass = runtimeBadgeClass(lastRuntime);
 
   return (
-    <section aria-label="PADAYON chat workspace" className="flex flex-col h-full min-h-0">
-      <main className="w-full h-full px-4 py-4 flex flex-col min-h-0">
+    <section aria-label="PADAYON chat workspace" className="flex flex-col h-full min-h-0 overflow-hidden">
+      <main className="w-full h-full px-4 py-4 flex flex-col min-h-0 overflow-hidden">
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -602,7 +603,7 @@ export default function ChatWorkspace({
           </div>
         </header>
 
-        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-scroll space-y-4 mb-4 scroll-smooth">
+        <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto space-y-4 mb-4 scroll-smooth">
           {messages.length === 0 && (
             <div className="text-center mt-10">
               {initialPrompt && (
