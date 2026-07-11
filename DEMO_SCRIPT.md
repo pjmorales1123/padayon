@@ -1,112 +1,144 @@
-# PADAYON Demo Script
+# PADAYON — Repeatable Demo Script
 
-**Goal:** Show judges that PADAYON is not another chatbot — it is an agentic, curriculum-aligned, multilingual learning operating system for Filipino students.
+**Live URL:** https://padayon-theta.vercel.app  
+**Backup URL:** https://courtesy-bacon-post-internet.trycloudflare.com (local tunnel)
 
-**Setup before recording:**
-1. Start the dev server: `npm run dev`
-2. Scale up Gemma 4: `node scripts/gemma4-scale.js up`
-3. Wait for `READY` (~2–4 minutes): `node scripts/gemma4-scale.js status`
-4. Open `http://localhost:3000/demo`
-5. Select **Gemma 4** in the chat header and confirm the purple badge appears.
+## Pre-demo setup (do this 2 minutes before judging)
 
----
+1. Open https://padayon-theta.vercel.app
+2. Click **"Reset personas"** on the home page to seed fresh demo profiles.
+3. Confirm Gemma 4 badge shows **"Gemma 4 ready"** in the header.
+4. Open the **Live Demo** or a persona card.
 
-## Opening (30 seconds)
-
-> "Most education chatbots give you an answer and forget you. PADAYON turns messy student input into a complete, organized study pack — aligned to the Philippine curriculum, adapted to the student's language, and remembered for next time."
-
-Navigate to `/` landing page, then click **See the live demo**.
+> Gemma 4 is on an on-demand Fireworks deployment. It burns credits while active, so you can toggle the model selector to **Auto (DeepSeek/Kimi)** for most testing and switch to **Gemma 4** only for the actual demo moments.
 
 ---
 
-## Beat 1 — Agent transparency (45 seconds)
+## The story in 30 seconds
 
-> "First, we don't hide the AI. Every message triggers a pipeline of specialized agents. You can watch them work in real time."
-
-In the `/demo` chat, type:
-```
-Explain photosynthesis like I'm 10
-```
-
-Point to the right panel:
-- **Classifier Agent** detects subject, topic, intent, and language.
-- **Curriculum Agent** aligns it to Grade 9 Science.
-- **Teaching Agent** crafts the reply.
-- **Memory Agent** updates the learner profile.
-
-> "This observability is what makes PADAYON trustworthy for students and teachers."
+"PISA scores show Filipino students falling behind, and one of the biggest barriers is academic English. Students have messy notes, lose motivation, and use AI just to copy answers. PADAYON is an AI study partner that turns messy notes and lesson PDFs into organized, curriculum-aligned study materials — in the student's own language first, then bridges them to academic English."
 
 ---
 
-## Beat 2 — Gemma 4 in action (30 seconds)
+## Demo flow
 
-> "For this hackathon we are using Gemma 4 31B Instruct, deployed on-demand through Fireworks. If Gemma is ever unavailable, PADAYON automatically falls back to serverless models so the student is never stuck."
+### 1. Hook — smart import (the "wow" moment)
 
-Click the model dropdown in the chat header and show **Gemma 4** selected with the purple active badge.
+**Goal:** Show that PADAYON can ingest real student materials and instantly organize them.
 
-Type:
-```
-Make flashcards for photosynthesis
-```
+1. Go to **Try the chat**.
+2. Click the **paperclip 📎** button.
+3. Upload:
+   - The 6 sample note photos from `C:\Users\Admin\Documents\IMG_20260629_0802*.jpg`
+   - OR the sample PDF `raisin_in_the_sun_lesson (1).pdf`
+4. Watch the progress: *"Rendering PDF page 1/6…"* → *"Reading page 1/6…"*
+5. PADAYON auto-classifies the subject/topic, aligns to Grade 9 curriculum, and creates:
+   - Clean notes
+   - Flashcards
+   - Quiz
+   - Summary
+   - Story
 
-Show the flashcard widget appearing inline and the backend monitor finishing all steps.
-
----
-
-## Beat 3 — Multilingual, adaptive teaching (45 seconds)
-
-> "In the Philippines, many students think in Cebuano or Filipino first. PADAYON meets them in their strongest language, then bridges to the academic English term."
-
-Type:
-```
-Unsa ang photosynthesis? Dili ko kasabot sa English.
-```
-
-Highlight:
-- Reply starts in Cebuano.
-- The English term **Photosynthesis** is explicitly introduced.
-- A guiding question is asked.
-
-> "Over time, the Memory Agent learns the student's confidence and adapts."
+**Talking point:** *"This is a real lesson PDF. PADAYON reads it, figures out it's English Literature → A Raisin in the Sun, aligns it to the Grade 9 curriculum, and builds a full study pack. The student didn't have to organize anything."*
 
 ---
 
-## Beat 4 — Photo notes to study pack (45 seconds)
+### 2. Before vs. after — when the app knows you
 
-> "Students often take handwritten notes. PADAYON can read them."
+**Goal:** Show adaptive memory and personalized responses.
 
-Use the 📷 button to upload a photo of handwritten notes (have a sample ready).
+#### A. New student — Maria
 
-Show:
-- OCR extraction.
-- Automatic subject/topic creation.
-- Flashcards and quiz generated from the photo.
-- "View study pack" link.
+1. From the home page, click **Maria (Brand new)**.
+2. Type: *"Explain photosynthesis"*
+3. Expected: Simple English, basic analogy, friendly tone.
 
-Click the study pack link to show the Library/topic page.
+**Talking point:** *"Maria is new. PADAYON doesn't know her yet, so it keeps it simple and in English."*
+
+#### B. Cebuano-first learner — Juan
+
+1. From the home page, click **Juan (Cebuano-first)**.
+2. Type the same prompt: *"Explain photosynthesis"*
+3. Expected: Response in Cebuano/English mix, because his profile says Cebuano: High.
+
+**Talking point:** *"Juan is strong in Cebuano but still learning academic English. PADAYON remembers that and explains in Cebuano first, then gives the English term **photosynthesis**."*
+
+#### C. Advanced English student — Alex
+
+1. Click **Alex (Advanced)**.
+2. Type: *"Explain situational irony with a harder example"*
+3. Expected: Deeper analysis, more complex example.
+
+**Talking point:** *"Alex is already confident. PADAYON goes deeper instead of dumbing it down."*
+
+#### D. Struggling student — Bea
+
+1. Click **Bea (Needs support)**.
+2. Type: *"I don't get quadratic equations. It looks hard."*
+3. Expected: Encouraging tone, tiny steps, gentle language.
+
+**Talking point:** *"Bea gets discouraged. PADAYON is warm, breaks the problem into small steps, and doesn't make her feel dumb."*
 
 ---
 
-## Beat 5 — Differentiation close (30 seconds)
+### 3. The backend agent monitor
 
-Navigate to `/deck` and advance to the comparison slide.
+**Goal:** Make the invisible pipeline visible.
 
-> "Generic chatbots answer questions. PADAYON organizes, teaches, adapts, and remembers — in the language the student actually understands. That's why it wins."
+1. Open the **Live Demo**.
+2. Send any prompt.
+3. Point to the right panel and narrate:
+   - **Classifier Agent** → figures out subject, topic, intent
+   - **Curriculum Agent** → aligns to Grade 9 competency
+   - **Subject/Topic Agent** → organizes the library
+   - **Material Creator** → builds flashcards, quiz, summary, story
+   - **Teaching Agent** → writes the personalized reply
+   - **Memory Agent** → updates strengths, weaknesses, learning style
+
+**Talking point:** *"This isn't one prompt. It's a pipeline of agents working together — and you can see exactly what each one is doing."*
 
 ---
 
-## Closing (15 seconds)
+### 4. Retrieval and continuity
 
-> "PADAYON: keep learning going. Built for Filipino students, powered by Gemma 4 and AMD."
+**Goal:** Show that materials persist and can be retrieved later.
 
-Show the final `/deck` thank-you slide.
+1. In any chat, type: *"Show my flashcards"*
+2. PADAYON retrieves the saved flashcards for the last active topic.
+3. Type: *"Quiz me"*
+4. PADAYON gives the saved quiz.
+
+**Talking point:** *"Everything is saved. The student can come back days later and review."*
 
 ---
 
-## After recording
+## Backup prompts if the model is slow
 
-Scale Gemma 4 down to stop billing:
+If Gemma 4 takes too long, switch the model selector to **Auto** and use these reliable prompts:
 
-```bash
-node scripts/gemma4-scale.js down
-```
+- *"Explain photosynthesis like I'm 10"*
+- *"Make flashcards for photosynthesis"*
+- *"Quiz me on photosynthesis"*
+- *"Unsa ang photosynthesis? Dili ko kasabot sa English."*
+
+These have fallback seeded materials, so the demo never breaks.
+
+---
+
+## Cost warning
+
+Gemma 4 on-demand on NVIDIA H200 burns ~$1.50–$2.50/hour while deployed and active. For the hackathon demo:
+
+- Use **Auto** model during setup and practice.
+- Switch to **Gemma 4** only for the judged demo run.
+- Scale down the Fireworks deployment when done.
+
+---
+
+## URLs to bookmark
+
+- App: https://padayon-theta.vercel.app
+- Demo with new student: https://padayon-theta.vercel.app/demo?userId=demo-new-student
+- Demo with Cebuano learner: https://padayon-theta.vercel.app/demo?userId=demo-bisaya-learner
+- Demo with advanced learner: https://padayon-theta.vercel.app/demo?userId=demo-english-advanced
+- Demo with struggling learner: https://padayon-theta.vercel.app/demo?userId=demo-struggling-student
