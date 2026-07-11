@@ -10,6 +10,7 @@ import {
   visualDesignerAgent,
 } from "@/lib/agents";
 import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack } from "@/lib/types";
+import { ModelRuntime } from "@/lib/fireworks";
 import { startRun, logStep } from "@/lib/agent-events";
 
 interface MaterialContent {
@@ -381,13 +382,15 @@ async function applyMemoryUpdate(
 }
 
 export async function POST(req: NextRequest) {
+  let modelRuntime: ModelRuntime | null = null;
+
   try {
     const body = await req.json();
     const { userId, message, quizResult, requestId: clientRequestId, imageUrl, model } = body;
     const preferredModel = model === "gemma-3" || model === "gemma-4" ? model : "auto";
 
     if (!userId || !message) {
-      return NextResponse.json({ error: "Missing userId or message" }, { status: 400 });
+      return NextResponse.json({ error: "Missing userId or message", model_runtime: modelRuntime }, { status: 400 });
     }
 
     const requestId = clientRequestId || `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -477,7 +480,7 @@ export async function POST(req: NextRequest) {
 
       logStep(requestId, "research", "Suggested related topics", "done", { topics: curriculumItems?.length || 0 });
       logStep(requestId, "finish", "Response complete", "done");
-      return NextResponse.json({ requestId, reply, classification, curriculum: null, topic: null, materials_created: [], saved_materials: [], interactive: null, memory_update: null });
+      return NextResponse.json({ requestId, reply, classification, curriculum: null, topic: null, materials_created: [], saved_materials: [], interactive: null, memory_update: null, model_runtime: modelRuntime });
     }
 
     // 4. Curriculum Alignment Agent
@@ -711,8 +714,8 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack, teachingQuizResult, classification, preferredModel);
-      logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length });
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
+      logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz\n✓ Summary${studyPack.story ? "\n✓ Story" : ""}`;
       }
@@ -728,8 +731,8 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack || undefined, teachingQuizResult, classification, preferredModel);
-      logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length });
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, history, studyPack || undefined, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
+      logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;
       }
@@ -784,10 +787,11 @@ export async function POST(req: NextRequest) {
       saved_materials: savedMaterials,
       interactive,
       memory_update: null,
+      model_runtime: modelRuntime,
     });
   } catch (err) {
     console.error("Agent error:", err);
     const message = err instanceof Error ? err.message : "Internal error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, model_runtime: modelRuntime }, { status: 500 });
   }
 }

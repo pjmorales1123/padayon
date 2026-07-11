@@ -1,4 +1,4 @@
-import { callFireworks, ModelPreference } from "./fireworks";
+import { callFireworks, ModelPreference, type ModelRuntimeReporter } from "./fireworks";
 import { supabaseAdmin } from "./supabase";
 import {
   Classification,
@@ -361,7 +361,8 @@ export async function teachingAgent(
   studyPack?: StudyPack,
   quizResult?: { correct: boolean; topic: string; question?: string } | null,
   classification?: Classification,
-  model: ModelPreference = "auto"
+  model: ModelPreference = "auto",
+  reportRuntime?: ModelRuntimeReporter
 ): Promise<string> {
   const materialHint = studyPack
     ? `\n\nStudy materials were organized for this topic. Only mention them if the student asked for them. Do not say "your flashcards are ready" or push the quiz unless the student explicitly asked for flashcards or a quiz. You may briefly say the topic is saved in their study pack if relevant.`
@@ -400,7 +401,7 @@ ${formatHistory(history)}
 
 Student message: "${message}"`;
 
-  const content = await callFireworks([{ role: "user", content: prompt }], false, 2500, model);
+  const content = await callFireworks([{ role: "user", content: prompt }], false, 2500, model, reportRuntime);
   if (content && content.trim().length > 10) return content;
 
   // Fallback for demo

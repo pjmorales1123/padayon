@@ -1,3 +1,10 @@
+export interface AgentResponseRuntime {
+  requested: "auto" | "gemma-3" | "gemma-4";
+  provider: "fireworks" | "gemma";
+  model: string;
+  fallback: boolean;
+}
+
 export interface Classification {
   subject: string;
   subcategory: string;

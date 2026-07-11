@@ -14,6 +14,15 @@ const GEMMA_API_KEY = process.env.GEMMA_API_KEY || process.env.FIREWORKS_API_KEY
 
 export type ModelPreference = "auto" | "gemma-3" | "gemma-4";
 
+export interface ModelRuntime {
+  requested: ModelPreference;
+  provider: "fireworks" | "gemma";
+  model: string;
+  fallback: boolean;
+}
+
+export type ModelRuntimeReporter = (runtime: ModelRuntime) => void;
+
 interface ChatMessage {
   role: string;
   content: string;
@@ -92,24 +101,41 @@ export async function callFireworks(
   messages: ChatMessage[],
   jsonMode = false,
   maxTokens = 1500,
-  preferredModel: ModelPreference = "auto"
+  preferredModel: ModelPreference = "auto",
+  reportRuntime?: ModelRuntimeReporter
 ) {
+  let gemmaAttempted = false;
+
   if (preferredModel === "gemma-3" || preferredModel === "gemma-4") {
     try {
       console.log(`Trying Gemma model preference: ${preferredModel}`);
-      return await callGemma(preferredModel, messages, jsonMode, maxTokens);
+      const { modelName } = resolveGemmaConfig(preferredModel);
+      const result = await callGemma(preferredModel, messages, jsonMode, maxTokens);
+      if (result && reportRuntime) {
+        reportRuntime({ requested: preferredModel, provider: "gemma", model: modelName, fallback: false });
+      }
+      return result;
     } catch (err) {
+      gemmaAttempted = true;
       console.warn(`Gemma ${preferredModel} failed, falling back to serverless`, err);
       // Fall through to default/fallback serverless models
     }
   }
 
   try {
-    return await callModel(DEFAULT_MODEL, messages, jsonMode, maxTokens);
+    const result = await callModel(DEFAULT_MODEL, messages, jsonMode, maxTokens);
+    if (result && reportRuntime) {
+      reportRuntime({ requested: preferredModel, provider: "fireworks", model: DEFAULT_MODEL, fallback: gemmaAttempted });
+    }
+    return result;
   } catch (err) {
     console.warn(`Primary model ${DEFAULT_MODEL} failed, trying fallback ${FALLBACK_MODEL}`, err);
     try {
-      return await callModel(FALLBACK_MODEL, messages, jsonMode, maxTokens);
+      const result = await callModel(FALLBACK_MODEL, messages, jsonMode, maxTokens);
+      if (result && reportRuntime) {
+        reportRuntime({ requested: preferredModel, provider: "fireworks", model: FALLBACK_MODEL, fallback: true });
+      }
+      return result;
     } catch (fallbackErr) {
       console.error(`Fallback model ${FALLBACK_MODEL} also failed`, fallbackErr);
       return '';
