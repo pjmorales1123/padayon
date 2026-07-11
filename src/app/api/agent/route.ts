@@ -556,7 +556,8 @@ export async function POST(req: NextRequest) {
         teachingQuizResult,
         classification,
         preferredModel,
-        (runtime) => { modelRuntime = runtime; }
+        (runtime) => { modelRuntime = runtime; },
+        imageUrl
       );
       const finalReply = reply && reply.length >= 10
         ? reply
@@ -815,7 +816,7 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; }, imageUrl);
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz\n✓ Summary${studyPack.story ? "\n✓ Story" : ""}`;
@@ -879,7 +880,7 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack || undefined, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; });
+      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack || undefined, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; }, imageUrl);
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;

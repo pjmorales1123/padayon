@@ -362,7 +362,8 @@ export async function teachingAgent(
   quizResult?: { correct: boolean; topic: string; question?: string } | null,
   classification?: Classification,
   model: ModelPreference = "auto",
-  reportRuntime?: ModelRuntimeReporter
+  reportRuntime?: ModelRuntimeReporter,
+  imageUrl?: string
 ): Promise<string> {
   const materialHint = studyPack
     ? `\n\nStudy materials were organized for this topic. Only mention them if the student asked for them. Do not say "your flashcards are ready" or push the quiz unless the student explicitly asked for flashcards or a quiz. You may briefly say the topic is saved in their study pack if relevant.`
@@ -370,6 +371,12 @@ export async function teachingAgent(
 
   const quizHint = quizResult
     ? `\n\nThe student just answered a quiz question ${quizResult.correct ? "correctly" : "incorrectly"}. If incorrect, do not give the answer directly. Give a hint, address the misconception, and ask a guiding question.`
+    : "";
+
+  const imageHint = imageUrl
+    ? `
+
+The student uploaded a picture of their notes. The text has already been extracted and is included in their message. Acknowledge that you can see their notes, respond based on the extracted text, and encourage them. Do not say you cannot see images.`
     : "";
 
   const prompt = `You are the Teaching Agent for PADAYON, an AI learning partner for Grade 9 students in the Philippines.
@@ -395,7 +402,7 @@ How to adapt:
 
 Learner profile: ${JSON.stringify(profile)}
 Topic: ${topic}
-Curriculum: ${JSON.stringify(curriculum)}${materialHint}${quizHint}
+Curriculum: ${JSON.stringify(curriculum)}${materialHint}${quizHint}${imageHint}
 
 Recent conversation:
 ${formatHistory(history)}
