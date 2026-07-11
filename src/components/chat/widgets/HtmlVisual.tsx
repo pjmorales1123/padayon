@@ -10,7 +10,7 @@ interface HtmlVisualProps {
 
 export default function HtmlVisual({ topic, title, html }: HtmlVisualProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(420);
+  const [height, setHeight] = useState(360);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -27,9 +27,9 @@ export default function HtmlVisual({ topic, title, html }: HtmlVisualProps) {
         const newHeight = Math.max(
           body?.scrollHeight || 0,
           htmlEl?.scrollHeight || 0,
-          420
+          360
         );
-        setHeight(Math.min(newHeight + 24, 720));
+        setHeight(Math.min(newHeight + 24, 520));
       } catch {
         // cross-origin or parsing issue; keep default
       }
@@ -57,7 +57,7 @@ export default function HtmlVisual({ topic, title, html }: HtmlVisualProps) {
           title={title}
           srcDoc={html}
           className="w-full border-0"
-          style={{ height, minHeight: 420 }}
+          style={{ height, minHeight: 360 }}
           sandbox="allow-scripts allow-same-origin"
           scrolling="no"
         />
