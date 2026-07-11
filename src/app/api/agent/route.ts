@@ -400,7 +400,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, model } = body;
+    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, attachmentType, model } = body;
     const preferredModel = model === "gemma-3" || model === "gemma-4" ? model : "auto";
 
     if (!userId || !message) {
@@ -735,41 +735,48 @@ export async function POST(req: NextRequest) {
     }
 
     if (imageUrl) {
-      const { data: existingImageMaterial } = await supabaseAdmin!
+      const uploadMaterialType = attachmentType === "pdf" ? "pdf_notes" : "image_notes";
+      const uploadMaterialTitle = attachmentType === "pdf" ? "Uploaded PDF" : "Uploaded Image";
+      const uploadMaterialContent =
+        attachmentType === "pdf"
+          ? { preview_image_url: imageUrl }
+          : { image_url: imageUrl };
+
+      const { data: existingUploadMaterial } = await supabaseAdmin!
         .from("materials")
         .select("id, type")
         .eq("topic_id", topic.id)
-        .eq("type", "image_notes")
+        .eq("type", uploadMaterialType)
         .maybeSingle();
 
-      if (existingImageMaterial?.id) {
+      if (existingUploadMaterial?.id) {
         const { error } = await supabaseAdmin!
           .from("materials")
-          .update({ title: "Uploaded Image", content: { image_url: imageUrl } })
-          .eq("id", existingImageMaterial.id);
+          .update({ title: uploadMaterialTitle, content: uploadMaterialContent })
+          .eq("id", existingUploadMaterial.id);
 
         if (error) {
-          console.error("Image material update error:", error);
+          console.error("Upload material update error:", error);
         } else {
-          savedMaterials = savedMaterials.filter((material) => material.type !== "image_notes");
-          savedMaterials.push({ type: "image_notes", id: existingImageMaterial.id });
+          savedMaterials = savedMaterials.filter((material) => material.type !== uploadMaterialType);
+          savedMaterials.push({ type: uploadMaterialType, id: existingUploadMaterial.id });
         }
       } else {
-        const { data: insertedImageMaterial, error } = await supabaseAdmin!
+        const { data: insertedUploadMaterial, error } = await supabaseAdmin!
           .from("materials")
-          .insert({ topic_id: topic.id, type: "image_notes", title: "Uploaded Image", content: { image_url: imageUrl } })
+          .insert({ topic_id: topic.id, type: uploadMaterialType, title: uploadMaterialTitle, content: uploadMaterialContent })
           .select("id, type")
           .single();
 
         if (error) {
-          console.error("Image material insert error:", error);
-        } else if (insertedImageMaterial) {
-          savedMaterials.push({ type: insertedImageMaterial.type, id: insertedImageMaterial.id });
+          console.error("Upload material insert error:", error);
+        } else if (insertedUploadMaterial) {
+          savedMaterials.push({ type: insertedUploadMaterial.type, id: insertedUploadMaterial.id });
         }
       }
 
-      if (!materials_created.includes("image_notes")) {
-        materials_created.push("image_notes");
+      if (!materials_created.includes(uploadMaterialType)) {
+        materials_created.push(uploadMaterialType);
       }
     }
 
