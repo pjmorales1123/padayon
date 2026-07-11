@@ -4,6 +4,10 @@ import LearnerSummary from "./LearnerSummary";
 
 describe("LearnerSummary", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function mockSummaryFetch(materialType: string) {
     vi.stubGlobal(
       "fetch",
       vi
@@ -28,8 +32,8 @@ describe("LearnerSummary", () => {
                     subcategory: "Biology",
                     materials: [
                       {
-                        type: "image_notes",
-                        title: "Uploaded Image",
+                        type: materialType,
+                        title: materialType === "pdf_notes" ? "Uploaded PDF" : "Uploaded Image",
                         created_at: "2026-07-11T09:00:00.000Z",
                       },
                     ],
@@ -40,13 +44,25 @@ describe("LearnerSummary", () => {
           }),
         ),
     );
-  });
+  }
 
   it("shows uploaded picture activity in the learner summary", async () => {
+    mockSummaryFetch("image_notes");
+
     render(<LearnerSummary userId="learner-1" refreshKey={0} />);
 
     expect(
       await screen.findByText("Placed one picture on your library and saved the contents."),
+    ).toBeTruthy();
+  });
+
+  it("shows uploaded PDF activity in the learner summary", async () => {
+    mockSummaryFetch("pdf_notes");
+
+    render(<LearnerSummary userId="learner-1" refreshKey={0} />);
+
+    expect(
+      await screen.findByText("Placed one PDF on your library and saved the contents."),
     ).toBeTruthy();
   });
 });

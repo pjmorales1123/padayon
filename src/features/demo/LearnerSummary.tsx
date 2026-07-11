@@ -153,6 +153,8 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
         let text = `Saved ${m.type.replace(/_/g, " ")} on ${folder}`;
         if (m.type === "image_notes") {
           text = "Placed one picture on your library and saved the contents.";
+        } else if (m.type === "pdf_notes") {
+          text = "Placed one PDF on your library and saved the contents.";
         } else if (m.type === "clean_notes") {
           text = `Saved transcribed notes on ${folder}`;
         } else if (m.type === "original_notes") {
