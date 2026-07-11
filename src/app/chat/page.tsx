@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import InteractiveMessage from "@/components/chat/InteractiveMessage";
-import AgentActivity from "@/components/chat/AgentActivity";
 import type { InteractivePayload } from "@/lib/types";
 
 const DEMO_USER_ID = "demo-user-id";
@@ -57,6 +56,8 @@ function ChatInner() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const sendingRef = useRef(false);
+  const autoSentRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/health")
@@ -103,19 +104,19 @@ function ChatInner() {
 
   const send = async (textOverride?: string, imageUrlOverride?: string, skipUserMessage = false) => {
     const userMsg = (textOverride ?? input).trim();
-    if (!userMsg || loading) return;
+    if (!userMsg || sendingRef.current) return;
+    sendingRef.current = true;
+    setLoading(true);
     const reqId = generateId("req");
     setActiveRequestId(reqId);
     setInput("");
     if (!skipUserMessage) {
       setMessages((prev) => [...prev, { role: "user", content: userMsg, imageUrl: imageUrlOverride }]);
     }
-    setLoading(true);
-    setStepLabel("Starting...");
 
-    // Poll backend agent events so the user sees live progress
     let cancelled = false;
-    const poll = async () => {
+    const interval = setInterval(async () => {
+      if (cancelled) return;
       try {
         const res = await fetch(`/api/agent/run?requestId=${encodeURIComponent(reqId)}`);
         if (!res.ok || cancelled) return;
@@ -127,8 +128,7 @@ function ChatInner() {
       } catch {
         // ignore polling errors
       }
-    };
-    const interval = setInterval(poll, 500);
+    }, 500);
 
     try {
       const res = await fetch("/api/agent", {
@@ -160,6 +160,7 @@ function ChatInner() {
       clearInterval(interval);
       setLoading(false);
       setStepLabel("Thinking...");
+      sendingRef.current = false;
     }
   };
 
@@ -261,10 +262,12 @@ function ChatInner() {
 
       // Show the first image as a preview in the user message
       const previewUrl = allDataUrls[0];
+      const pageCount = allDataUrls.length;
       const summary = combinedText.split("\n").slice(0, 3).join(" ").slice(0, 140);
+      const importLabel = pageCount > 1 ? `[Imported ${pageCount} pages]` : `[Imported 1 page]`;
       setMessages((prev) => [
         ...prev,
-        { role: "user", content: `[Imported notes]\n${summary}${combinedText.length > 140 ? "..." : ""}`, imageUrl: previewUrl },
+        { role: "user", content: `${importLabel}\n${summary}${combinedText.length > 140 ? "..." : ""}`, imageUrl: previewUrl },
       ]);
 
       send(combinedText, previewUrl, true);
@@ -386,13 +389,12 @@ function ChatInner() {
   const pendingPrompt = searchParams?.get("prompt");
 
   // Auto-send a demo prompt from the URL so screenshot / demo flows can trigger a real conversation.
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
-    if (pendingPrompt && searchParams?.get("autoSend") === "1" && !loading) {
+    if (pendingPrompt && searchParams?.get("autoSend") === "1" && !autoSentRef.current && !sendingRef.current) {
+      autoSentRef.current = true;
       send(pendingPrompt);
     }
-  }, [pendingPrompt]);
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  }, [pendingPrompt, searchParams, send]);
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-4 flex flex-col h-[calc(100vh-2rem)]">
@@ -559,14 +561,9 @@ function ChatInner() {
                   <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                   <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
-                <span className="text-sm font-medium">{stepLabel}</span>
+                <span className="text-sm font-medium">PADAYON is thinking...</span>
               </div>
             </div>
-          </div>
-        )}
-        {activeRequestId && (
-          <div className="max-w-[85%] self-start">
-            <AgentActivity requestId={activeRequestId} isActive={loading} />
           </div>
         )}
         <div ref={bottomRef} />

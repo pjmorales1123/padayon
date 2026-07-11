@@ -17,13 +17,23 @@ export async function POST(req: NextRequest) {
 
     const prompt = `You are an OCR assistant for PADAYON, an AI learning partner for Filipino students.
 
-Extract all readable text from this image of student notes. Preserve line breaks and formatting as much as possible.
+Your task: read the image of student notes and extract every readable word. Preserve line breaks and formatting. Do NOT describe the image. Do NOT explain what OCR is. Do NOT repeat these instructions.
 
-Then add a brief summary (1-2 sentences) of what subject and topic the notes are about.
+Output format: plain text only. No markdown, no code fences, no explanations, no summaries.`;
 
-Return ONLY plain text. No markdown, no code fences, no explanations.`;
+    let extractedText = await callFireworksVision(image, prompt, 1200);
 
-    const extractedText = await callFireworksVision(image, prompt, 1200);
+    // Guard against models that echo the prompt instead of extracting text.
+    const looksLikePrompt =
+      /OCR assistant|Extract all readable text|student notes|Return ONLY plain text|No markdown|preserve line breaks/i.test(
+        extractedText || ""
+      ) && !/[a-z]{3,}/i.test((extractedText || "").replace(/OCR assistant|Extract all readable text|student notes|Return ONLY plain text|No markdown|preserve line breaks/gi, ""));
+
+    if (looksLikePrompt || !extractedText || extractedText.trim().length < 5) {
+      console.warn("OCR returned prompt or empty text, retrying with alternate prompt. Raw:", extractedText?.slice(0, 200));
+      const fallbackPrompt = "Transcribe all text visible in this image exactly as it appears. Output only the transcription.";
+      extractedText = await callFireworksVision(image, fallbackPrompt, 1200);
+    }
 
     if (!extractedText || extractedText.trim().length < 5) {
       return NextResponse.json(
