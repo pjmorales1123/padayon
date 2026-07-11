@@ -417,11 +417,10 @@ export default function ChatWorkspace({
       // Show the first image as a preview in the user message
       const previewUrl = allDataUrls[0];
       const pageCount = allDataUrls.length;
-      const summary = combinedText.split("\n").slice(0, 3).join(" ").slice(0, 140);
       const importLabel = pageCount > 1 ? `[Imported ${pageCount} pages]` : `[Imported 1 page]`;
       setMessages((prev) => [
         ...prev,
-        { role: "user", content: `${importLabel}\n${summary}${combinedText.length > 140 ? "..." : ""}`, imageUrl: previewUrl },
+        { role: "user", content: importLabel, imageUrl: previewUrl },
       ]);
 
       send(combinedText, previewUrl, true, pdfFiles.length > 0 ? "pdf" : "image");
@@ -446,14 +445,9 @@ export default function ChatWorkspace({
 
     try {
       const text = await ocrImageDataUrl(dataUrl, requestId);
-      const preview = text.split("\n").slice(0, 2).join(" ").slice(0, 120);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "user",
-          content: `[Uploaded image]${preview ? `\n${preview}${text.length > 120 ? "..." : ""}` : ""}`,
-          imageUrl: dataUrl,
-        },
+        { role: "user", content: "[Uploaded image]", imageUrl: dataUrl },
       ]);
       send(text, dataUrl, true, "image");
     } catch (err) {

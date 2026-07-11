@@ -366,7 +366,9 @@ export async function teachingAgent(
   imageUrl?: string
 ): Promise<string> {
   const materialHint = studyPack
-    ? `\n\nStudy materials were organized for this topic. Only mention them if the student asked for them. Do not say "your flashcards are ready" or push the quiz unless the student explicitly asked for flashcards or a quiz. You may briefly say the topic is saved in their study pack if relevant.`
+    ? imageUrl
+      ? `\n\nStudy materials were organized from the uploaded picture. Briefly summarize the extracted notes in your own words, confirm they were saved, and offer to make flashcards, a quiz, or a review sheet if the student wants.`
+      : `\n\nStudy materials were organized for this topic. Only mention them if the student asked for them. Do not say "your flashcards are ready" or push the quiz unless the student explicitly asked for flashcards or a quiz. You may briefly say the topic is saved in their study pack if relevant.`
     : "";
 
   const quizHint = quizResult
