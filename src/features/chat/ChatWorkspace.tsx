@@ -104,6 +104,7 @@ export default function ChatWorkspace({
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; label: string } | null>(null);
   const [model, setModel] = useState<"auto" | "gemma-4">(initialModel);
   const [modelStatus, setModelStatus] = useState<{ gemma3?: boolean; gemma4?: boolean }>({});
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -140,8 +141,14 @@ export default function ChatWorkspace({
   }, [userId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, stepLabel, importProgress, requestState]);
+    const container = scrollContainerRef.current;
+    const el = bottomRef.current;
+    if (!container || !el) return;
+    const hasOverflow = container.scrollHeight > container.clientHeight;
+    if (hasOverflow || messages.length > 0) {
+      el.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto" });
+    }
+  }, [messages, stepLabel, requestState]);
 
   function clearSlowTimer() {
     if (slowTimerRef.current) {
@@ -499,7 +506,7 @@ export default function ChatWorkspace({
 
   return (
     <section aria-label="PADAYON chat workspace" className={embedded ? "h-full" : undefined}>
-      <main className={`max-w-3xl mx-auto px-4 py-4 flex flex-col ${embedded ? "h-full" : "h-[calc(100vh-4rem)]"}`}>
+      <main className={`max-w-3xl mx-auto w-full px-4 py-4 flex flex-col ${embedded ? "h-full" : "h-[calc(100vh-4rem)]"}`}>
         <header className="flex items-center justify-between mb-4 gap-3 bg-white/80 backdrop-blur rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -561,7 +568,7 @@ export default function ChatWorkspace({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto space-y-4 mb-4 scroll-smooth">
           {messages.length === 0 && (
             <div className="text-center mt-10">
               {initialPrompt && (
@@ -797,7 +804,7 @@ export default function ChatWorkspace({
           </div>
         )}
 
-        <div className="w-full flex justify-center">
+        <div className="w-full flex justify-center px-1">
           <input
             ref={fileInputRef}
             type="file"

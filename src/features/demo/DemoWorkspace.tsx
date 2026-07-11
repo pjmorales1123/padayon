@@ -88,7 +88,7 @@ export default function DemoWorkspace({ initialUserId }: DemoWorkspaceProps) {
   };
 
   return (
-    <main className="flex h-screen flex-col bg-slate-100 overflow-hidden pb-16">
+    <main className="flex h-[calc(100dvh-4rem)] flex-col bg-slate-100 overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
