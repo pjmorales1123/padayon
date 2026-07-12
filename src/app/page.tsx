@@ -165,7 +165,7 @@ export default function Home() {
                   href={`${buildAppHref("/demo", activeUserId)}&new=1&model=gemma-4`}
                   className="rounded-xl bg-white text-slate-700 border border-slate-300 px-6 py-3 font-semibold hover:bg-slate-50 transition"
                 >
-                  See Live Demo
+                  Watch PADAYON Think Live
                 </Link>
               </div>
             </div>
