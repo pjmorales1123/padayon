@@ -29,9 +29,10 @@ describe("visualDesignerAgent", () => {
 
     const htmlVisual = visual as { html: string };
     expect(htmlVisual.html).toContain("<!DOCTYPE html>");
-    expect(htmlVisual.html).toContain("<svg");
-    expect(htmlVisual.html).toContain("<line");
-    expect(htmlVisual.html).toContain("<circle");
-    expect(htmlVisual.html).toContain("point-icon");
+    expect(htmlVisual.html).toContain("cdn.tailwindcss.com");
+    expect(htmlVisual.html).toContain("DM Sans");
+    expect(htmlVisual.html).toContain("grid grid-cols");
+    expect(htmlVisual.html).toContain("👤⚔️👤");
+    expect(htmlVisual.html).toContain("rounded-2xl");
   });
 });

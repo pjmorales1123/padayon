@@ -662,17 +662,18 @@ Current profile: ${JSON.stringify(profile)}`;
 
 const VISUAL_LLM_TIMEOUT_MS = 12000;
 
-const VISUAL_SYSTEM_PROMPT = `You are an expert visual designer and front-end developer. Your job is to turn a lesson topic into a single, self-contained HTML visual that looks like a clean Canva-style infographic.
+const VISUAL_SYSTEM_PROMPT = `You are an expert visual designer and front-end developer. Your job is to turn a lesson topic into a single HTML visual that looks like a Canva Code infographic.
 
 Rules:
 - Return ONLY valid JSON with this shape: {"title": "...", "html": "..."}
-- The html value must be a complete <!DOCTYPE html> document with inline CSS.
-- Use only inline SVG for graphics. Do not use <img>, <canvas>, or external assets.
-- Include simple SVG icons, geometric shapes, connecting arrows, and lines that show relationships.
-- Use a modern, soft color palette (pastel cards, subtle gradients, rounded corners).
-- The layout must be responsive and readable on a phone screen.
-- Label every shape or icon clearly with short text.
-- Keep the visual compact but informative.
+- The html value must be a complete <!DOCTYPE html> document.
+- Load Tailwind CSS from https://cdn.tailwindcss.com in the <head>.
+- Load a clean font such as DM Sans or Inter from Google Fonts.
+- Use emoji as large visual icons at the top of each concept card (e.g., 👤⚔️👤, 🧠💭, 👤🆚🌍).
+- Lay out concepts as a responsive grid of rounded cards with soft shadows and pastel backgrounds.
+- Use geometric shapes, connecting lines, or arrows between cards when showing relationships or flow.
+- Keep text short and readable; put detailed explanations inside cards or below the icon.
+- Do not use external images, <img>, or <canvas>.
 - Do not use JavaScript.
 - Do not include markdown code fences or any text outside the JSON object.`;
 
@@ -702,14 +703,15 @@ ${keyPoints.map((p, i) => `${i + 1}. ${p}`).join("\n") || "1. Explore the topic 
 Flashcards to include as mini summary boxes:
 ${flashcards}
 
-Design requirements:
-1. Use a centered card layout with a colored gradient header.
-2. Include an SVG diagram with icons and connecting arrows/lines.
-3. Use simple SVG icon shapes such as circles for concepts, rounded rectangles for steps, and arrows for flow.
-4. Add a short key-point list; place a small SVG icon (checkmark, star, or lightbulb) next to each point.
-5. Include 2-3 small visual summary boxes for important terms.
-6. Use CSS only (no JavaScript).
-7. Make it look polished and friendly, like a Canva infographic.
+Design requirements (Canva Code style):
+1. Use Tailwind CSS classes for layout, spacing, colors, rounded corners, and shadows.
+2. Display each main concept as a rounded card in a responsive grid (1 col on mobile, 2-3 cols on larger screens).
+3. Place a large emoji icon (or emoji combo) at the top of every card to represent the concept visually.
+4. Add a bold card title and a one-sentence description below the icon.
+5. Include a central title/header for the topic using a gradient or colored background.
+6. Use connecting lines, arrows, or a simple flow diagram between cards when the topic has steps or relationships.
+7. Use a soft pastel color palette and plenty of white space.
+8. Keep the page compact, mobile-friendly, and free of JavaScript.
 
 Return JSON only.`;
 }
@@ -723,61 +725,60 @@ function buildFastHtmlVisual(
   const keyPoints = (studyPack.clean_notes || studyPack.summary || `Learn about ${topic}.`)
     .split(/\.|\n/)
     .map((s) => s.trim())
-    .filter((s) => s.length > 10 && s.length < 120)
-    .slice(0, 4);
+    .filter((s) => s.length > 10 && s.length < 140)
+    .slice(0, 5);
 
-  const cards = (studyPack.flashcards || []).slice(0, 3).map((c) => `
-    <div class="flip-card" onclick="this.classList.toggle('flipped')">
-      <div class="flip-card-inner">
-        <div class="flip-card-front">${escapeHtml(c.front)}</div>
-        <div class="flip-card-back">${escapeHtml(c.back)}</div>
-      </div>
-    </div>`).join("");
+  const flashcards = (studyPack.flashcards || []).slice(0, 3);
+  const topicLower = topic.toLowerCase();
 
-  const nodeCount = Math.max(keyPoints.length, 1);
-  const radius = 90;
-  const centerX = 200;
-  const centerY = 110;
-  const nodeRadius = 32;
-  const palette = [
-    { fill: "#fee2e2", stroke: "#ef4444", icon: "#dc2626" },
-    { fill: "#fef3c7", stroke: "#f59e0b", icon: "#d97706" },
-    { fill: "#dcfce7", stroke: "#22c55e", icon: "#16a34a" },
-    { fill: "#dbeafe", stroke: "#3b82f6", icon: "#2563eb" },
+  const emojiFor = (text: string, index: number): string => {
+    const lower = text.toLowerCase();
+    if (topicLower.includes("conflict")) {
+      if (lower.includes("person") || lower.includes("man") || lower.includes("character")) return "👤⚔️👤";
+      if (lower.includes("self") || lower.includes("inner")) return "🧠💭";
+      if (lower.includes("society") || lower.includes("community")) return "👤🆚🏛️";
+      if (lower.includes("nature") || lower.includes("environment")) return "👤🆚🌍";
+      if (lower.includes("technology") || lower.includes("machine")) return "👤🆚⚙️";
+    }
+    if (topicLower.includes("photosynthesis")) {
+      if (lower.includes("sun") || lower.includes("light")) return "☀️";
+      if (lower.includes("water")) return "💧";
+      if (lower.includes("carbon") || lower.includes("co2")) return "🌬️";
+      if (lower.includes("chloroplast") || lower.includes("leaf")) return "🌿";
+      if (lower.includes("glucose") || lower.includes("food")) return "🍬";
+    }
+    const generic = ["💡", "🔵", "🟢", "🟡", "🔴", "🧩", "⭐", "📘", "🎯", "🌟"];
+    return generic[index % generic.length];
+  };
+
+  const cardBg = [
+    "bg-rose-50 border-rose-200",
+    "bg-amber-50 border-amber-200",
+    "bg-emerald-50 border-emerald-200",
+    "bg-sky-50 border-sky-200",
+    "bg-violet-50 border-violet-200",
   ];
 
-  const nodes = keyPoints.map((p, i) => {
-    const angle = (i * 2 * Math.PI) / nodeCount - Math.PI / 2;
-    const cx = centerX + radius * Math.cos(angle);
-    const cy = centerY + radius * Math.sin(angle);
-    const edgeX = centerX + (radius - nodeRadius) * Math.cos(angle);
-    const edgeY = centerY + (radius - nodeRadius) * Math.sin(angle);
-    const centerEdgeX = centerX + 42 * Math.cos(angle);
-    const centerEdgeY = centerY + 42 * Math.sin(angle);
-    const { fill, stroke, icon } = palette[i % palette.length];
-    const short = escapeHtml(p).slice(0, 22);
+  const conceptCards = keyPoints.map((p, i) => {
+    const words = escapeHtml(p).split(" ");
+    const title = words.slice(0, 4).join(" ") || `Point ${i + 1}`;
+    const desc = words.slice(4).join(" ") || escapeHtml(p);
     return `
-      <line x1="${centerEdgeX}" y1="${centerEdgeY}" x2="${edgeX}" y2="${edgeY}" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"/>
-      <circle cx="${cx}" cy="${cy}" r="${nodeRadius}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-      <circle cx="${cx}" cy="${cy - 10}" r="5" fill="${icon}"/>
-      <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="9" fill="#1f2937" font-weight="600">${short}</text>`;
+    <div class="${cardBg[i % cardBg.length]} border rounded-2xl p-5 text-center shadow-sm hover:shadow-md transition-shadow">
+      <div class="text-5xl mb-3">${emojiFor(p, i)}</div>
+      <h3 class="font-bold text-slate-800 mb-1">${title}</h3>
+      <p class="text-sm text-slate-600 leading-snug">${desc}</p>
+    </div>`;
   }).join("");
 
-  const svgDiagram = `
-    <svg viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto" role="img" aria-label="Visual map for ${escapeHtml(topic)}">
-      <defs>
-        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-          <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
-        </marker>
-      </defs>
-      <rect x="10" y="10" width="380" height="200" rx="16" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
-      <circle cx="${centerX}" cy="${centerY}" r="44" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="3"/>
-      <text x="${centerX}" y="${centerY - 6}" text-anchor="middle" font-size="11" fill="#0369a1" font-weight="700">${escapeHtml(topic).slice(0, 18)}</text>
-      <text x="${centerX}" y="${centerY + 10}" text-anchor="middle" font-size="9" fill="#0ea5e9">visual map</text>
-      ${nodes}
-    </svg>`;
+  const flashCards = flashcards.map((c, i) => `
+    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-center shadow-sm">
+      <div class="text-2xl mb-2">${emojiFor(c.front, i + keyPoints.length)}</div>
+      <h4 class="font-semibold text-indigo-900 text-sm mb-1">${escapeHtml(c.front)}</h4>
+      <p class="text-xs text-indigo-700">${escapeHtml(c.back)}</p>
+    </div>`).join("");
 
-  const html = `<!DOCTYPE html>\r\n<html lang="en">\r\n<head>\r\n<meta charset="UTF-8">\r\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\r\n<title>${escapeHtml(topic)} Visual</title>\r\n<style>\r\n  *{box-sizing:border-box;margin:0;padding:0}\r\n  body{font-family:system-ui,-apple-system,BlinkMacSystemFont,\\"Segoe UI\\",Roboto,sans-serif;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);padding:16px;color:#0f172a}\r\n  .card{max-width:760px;margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.08);overflow:hidden}\r\n  .header{background:linear-gradient(90deg,#0ea5e9,#2563eb);color:#fff;padding:18px 20px}\r\n  .header h1{font-size:1.25rem;font-weight:700}\r\n  .header span{font-size:0.75rem;opacity:0.9}\r\n  .body{padding:18px 20px}\r\n  .diagram-wrap{background:#f8fafc;border-radius:14px;padding:12px;margin-bottom:16px;border:1px solid #e2e8f0}\r\n  .points{display:grid;gap:10px;margin-bottom:16px}\r\n  .point{display:flex;align-items:flex-start;gap:10px;background:#f1f5f9;padding:10px 12px;border-radius:10px;border-left:4px solid #0ea5e9}\r\n  .point-icon{width:18px;height:18px;flex-shrink:0;color:#0ea5e9}\r\n  .point p{font-size:0.9rem;line-height:1.4}\r\n  .flip-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}\r\n  .flip-card{perspective:800px;height:120px;cursor:pointer}\r\n  .flip-card-inner{position:relative;width:100%;height:100%;transition:transform 0.5s;transform-style:preserve-3d;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}\r\n  .flip-card.flipped .flip-card-inner{transform:rotateY(180deg)}\r\n  .flip-card-front,.flip-card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;display:flex;align-items:center;justify-content:center;padding:10px;border-radius:12px;text-align:center;font-size:0.85rem}\r\n  .flip-card-front{background:#dbeafe;color:#1e40af;font-weight:600}\r\n  .flip-card-back{background:#1e40af;color:#fff;transform:rotateY(180deg)}\r\n  .tip{background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:12px;font-size:0.85rem;color:#92400e}\r\n  .tip strong{color:#78350f}\r\n</style>\r\n</head>\r\n<body>\r\n<div class="card">\r\n  <div class="header">\r\n    <h1>${escapeHtml(topic)}</h1>\r\n    <span>Visual guide · ${escapeHtml(lang)}</span>\r\n  </div>\r\n  <div class="body">\r\n    <div class="diagram-wrap">${svgDiagram}</div>\r\n    <div class="points">\r\n      ${keyPoints.map((p) => `<div class="point"><svg class="point-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><p>${escapeHtml(p)}</p></div>`).join("")}\r\n    </div>\r\n    <div class="flip-cards">${cards}</div>\r\n    <div class="tip"><strong>Study tip:</strong> Click each card to flip it and test yourself. Say the answer out loud before checking.</div>\r\n  </div>\r\n</div>\r\n</body>\r\n</html>`;
+  const html = `<!DOCTYPE html>\r\n<html lang="en">\r\n<head>\r\n<meta charset="UTF-8">\r\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\r\n<title>${escapeHtml(topic)} Visual</title>\r\n<script src="https://cdn.tailwindcss.com"></script>\r\n<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">\r\n<style>body{font-family:'DM Sans',sans-serif;}</style>\r\n</head>\r\n<body class="min-h-screen p-6 bg-gradient-to-br from-sky-50 to-indigo-50">\r\n<main class="max-w-3xl mx-auto">\r\n  <div class="bg-gradient-to-r from-sky-500 to-indigo-600 rounded-2xl p-6 mb-6 text-white shadow-lg text-center">\r\n    <h1 class="text-2xl font-bold mb-1">${escapeHtml(topic)}</h1>\r\n    <p class="text-sm opacity-90">Visual guide · ${escapeHtml(lang)}</p>\r\n  </div>\r\n  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">${conceptCards}</div>\r\n  ${flashCards ? `<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">${flashCards}</div>` : ""}\r\n  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">\r\n    <strong>Study tip:</strong> Say each concept out loud, then cover the description and try to explain it in your own words.\r\n  </div>\r\n</main>\r\n</body>\r\n</html>`;
 
   return { title: `${topic} Visual`, html };
 }
