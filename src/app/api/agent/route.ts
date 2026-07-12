@@ -14,6 +14,7 @@ import { addStudentNote, type StudentNote } from "@/lib/student-memory";
 import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack, Subject, Topic } from "@/lib/types";
 import { ModelRuntime } from "@/lib/fireworks";
 import { startRun, logStep } from "@/lib/agent-events";
+import { isVisualLearningRequest } from "@/lib/visual-request";
 import {
   formatRetrievedMaterial,
   getReplyHistoryForIntent,
@@ -166,9 +167,7 @@ function normalizeClassification(
 
   // Strong visual guard: if the student explicitly asks for a visual/diagram/picture, force make_visual.
   const lowerOriginal = originalMessage.toLowerCase();
-  const visualKeywords = /(visual|diagram|infographic|chart|picture|illustration|drawing|graph|image)/i;
-  const visualAction = /(show|give|draw|make|create|want|need)/i;
-  if (visualAction.test(originalMessage) && visualKeywords.test(originalMessage)) {
+  if (isVisualLearningRequest(originalMessage)) {
     intent = "make_visual";
     logStep(requestId, "classify", "Visual request detected, forcing make_visual intent", "done");
   }

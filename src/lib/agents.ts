@@ -1,5 +1,6 @@
 import { callFireworks, ModelPreference, type ModelRuntimeReporter } from "./fireworks";
 import { supabaseAdmin } from "./supabase";
+import { isVisualLearningRequest } from "./visual-request";
 import {
   Classification,
   CurriculumMatch,
@@ -120,7 +121,7 @@ function keywordClassification(message: string): Classification {
 
   const retrieval = lower.includes("flashcard") || lower.includes("quiz") || lower.includes("reviewer") || lower.includes("review") || lower.includes("show my") || lower.includes("my flashcards") || lower.includes("my quiz") || lower.includes("my notes") || lower.includes("summary");
   const explicitCreation = lower.includes("create") || lower.includes("make") || lower.includes("build") || lower.includes("organize") || lower.includes("study pack") || lower.includes("notes");
-  const visual = /visual|diagram|infographic|chart|picture|illustration|drawing|graph|image of|show me a|paano magdrawing/i.test(lower);
+  const visual = isVisualLearningRequest(message);
   const research = /didn't listen|missed the lesson|wala ko nakadungog|wala ko namatikdan|related topics|what did we talk about|what did you discuss|what topics|unsa among gisaysay|unsa among gipasabot/i.test(lower);
   let intent: Classification["intent"] = "teach_topic";
   if (research) intent = "research_topics";
@@ -805,7 +806,7 @@ export async function visualDesignerAgent(
   const wantsFlashcards = classification.intent === "make_flashcards" || /flashcard|flash card|card/i.test(lower);
   const wantsQuiz = classification.intent === "make_quiz" || /quiz|test|question/i.test(lower);
   const wantsTable = /table|compare|comparison|difference|versus|vs\.?/i.test(lower);
-  const wantsVisual = /visual|diagram|picture|image|infographic|chart|graphic|show me|illustrate/i.test(lower);
+  const wantsVisual = classification.intent === "make_visual" || isVisualLearningRequest(message);
 
   if (wantsFlashcards && studyPack.flashcards && studyPack.flashcards.length > 0) {
     return {
