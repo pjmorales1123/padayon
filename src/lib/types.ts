@@ -1,5 +1,5 @@
 export interface AgentResponseRuntime {
-  requested: "auto" | "gemma-3" | "gemma-4";
+  requested: "auto" | "fallback" | "gemma-3" | "gemma-4";
   provider: "fireworks" | "gemma";
   model: string;
   fallback: boolean;
@@ -43,6 +43,8 @@ export interface StudyPack {
   quiz: QuizItem[];
   summary: string;
   story?: string;
+  lesson_scope?: { confirmed_by_student?: boolean; core_concepts?: string[] };
+  outside_scope?: { advanced_concepts?: string[] };
 }
 
 export interface MemoryUpdate {
@@ -78,6 +80,10 @@ export interface Topic {
   subcategory: string | null;
   curriculum_match: Record<string, unknown>;
   progress: Record<string, unknown>;
+  teacher_confirmed?: boolean;
+  lesson_scope?: Record<string, unknown>;
+  outside_scope?: Record<string, unknown>;
+  mastery_map?: Record<string, unknown>;
   last_studied_at: string;
   created_at: string;
 }

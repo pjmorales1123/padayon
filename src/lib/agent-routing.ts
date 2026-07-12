@@ -5,13 +5,14 @@ const OFFICIAL_TOPIC_INTENTS = new Set([
   "make_flashcards",
   "make_reviewer",
   "make_quiz",
+  "make_summary",
   "make_story",
   "make_visual",
   "retrieve_material",
   "continue_learning",
 ]);
 
-const HISTORY_AWARE_INTENTS = new Set(["continue_learning", "retrieve_material"]);
+const HISTORY_AWARE_INTENTS = new Set(["continue_learning", "retrieve_material", "make_summary"]);
 
 function normalizeText(value: string) {
   return value

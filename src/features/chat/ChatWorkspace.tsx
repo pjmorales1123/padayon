@@ -57,8 +57,13 @@ function validateFiles(files: File[]): string | null {
 function runtimeBadgeLabel(runtime: AgentResponseRuntime | null): string | null {
   if (!runtime) return null;
   if (runtime.provider === "gemma" && !runtime.fallback) return "Gemma 4 · AMD/Fireworks";
-  if (runtime.provider === "fireworks" && !runtime.fallback) return "Auto · Fireworks";
-  return "Fallback · Fireworks";
+  // Intentional fallback selection uses DeepSeek V4 Flash serverless.
+  if (runtime.provider === "fireworks" && (runtime.requested === "fallback" || runtime.requested === "auto") && !runtime.fallback) {
+    return "DeepSeek V4 Flash · Fireworks";
+  }
+  // Gemma was requested but failed, so we fell back.
+  if (runtime.provider === "fireworks" && runtime.fallback) return "Fallback · Fireworks";
+  return "Fireworks";
 }
 
 function runtimeBadgeClass(runtime: AgentResponseRuntime | null): string {
@@ -66,16 +71,16 @@ function runtimeBadgeClass(runtime: AgentResponseRuntime | null): string {
   if (runtime.provider === "gemma" && !runtime.fallback) {
     return "bg-purple-100 text-purple-800 border-purple-200";
   }
-  if (runtime.fallback) {
-    return "bg-amber-100 text-amber-800 border-amber-200";
+  if (runtime.provider === "fireworks" && (runtime.requested === "fallback" || runtime.requested === "auto") && !runtime.fallback) {
+    return "bg-blue-100 text-blue-700 border-blue-200";
   }
-  return "bg-blue-100 text-blue-700 border-blue-200";
+  return "bg-amber-100 text-amber-800 border-amber-200";
 }
 
 export interface ChatWorkspaceProps {
   userId: string;
   topicId?: string;
-  initialModel?: "auto" | "gemma-3" | "gemma-4";
+  initialModel?: "fallback" | "gemma-4";
   initialPrompt?: string;
   autoSend?: boolean;
   initialRequestId?: string;
@@ -106,8 +111,8 @@ export default function ChatWorkspace({
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; label: string } | null>(null);
-  const [model, setModel] = useState<"auto" | "gemma-3" | "gemma-4">(initialModel);
-  const [modelStatus, setModelStatus] = useState<{ gemma3?: boolean; gemma4?: boolean }>({});
+  const [model, setModel] = useState<"fallback" | "gemma-4">(initialModel);
+  const [currentTopicId, setCurrentTopicId] = useState<string | undefined>(topicId);
   const [skipHistory, setSkipHistory] = useState(startFresh);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -130,11 +135,8 @@ export default function ChatWorkspace({
   }, [input]);
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((d) => setModelStatus({ gemma3: d.gemma3Configured, gemma4: d.gemma4Configured }))
-      .catch(() => setModelStatus({}));
-  }, []);
+    setCurrentTopicId(topicId);
+  }, [topicId]);
 
   useEffect(() => {
     fetch(`/api/profile?userId=${encodeURIComponent(userId)}`)
@@ -263,13 +265,16 @@ export default function ChatWorkspace({
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, message: userMsg, requestId: reqId, imageUrl: imageUrlOverride, attachmentType, model }),
+        body: JSON.stringify({ userId, message: userMsg, requestId: reqId, imageUrl: imageUrlOverride, attachmentType, model, topicId: currentTopicId }),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
       setLastRuntime(data.model_runtime || null);
+      if (data.topic?.id) {
+        setCurrentTopicId(data.topic.id);
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -298,7 +303,7 @@ export default function ChatWorkspace({
       sendingRef.current = false;
       onRequestComplete?.(reqId);
     }
-  }, [userId, model, onRequestStart, onRequestComplete]);
+  }, [userId, model, currentTopicId, onRequestStart, onRequestComplete]);
 
   async function ocrImageDataUrl(dataUrl: string, requestId?: string): Promise<string> {
     const formData = new FormData();
@@ -576,24 +581,6 @@ export default function ChatWorkspace({
                 {runtimeLabel}
               </span>
             )}
-            {(model === "gemma-4" || model === "gemma-3") && (
-              <span
-                className={`hidden sm:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                  modelStatus.gemma4 || modelStatus.gemma3 ? "bg-purple-100 text-purple-800" : "bg-amber-100 text-amber-800"
-                }`}
-                title={
-                  modelStatus.gemma4 || modelStatus.gemma3
-                    ? "Gemma endpoint configured. Powered by AMD + Fireworks AI."
-                    : "Gemma endpoint not configured — falling back to Fireworks serverless"
-                }
-              >
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current"></span>
-                </span>
-                {modelStatus.gemma4 || modelStatus.gemma3 ? `${model === "gemma-4" ? "Gemma 4" : "Gemma 3"} · AMD/Fireworks` : "Fallback"}
-              </span>
-            )}
             <button
               onClick={createNewProfile}
               disabled={busy}
@@ -620,14 +607,13 @@ export default function ChatWorkspace({
             <select
               id="model-select"
               value={model}
-              onChange={(e) => setModel(e.target.value as "auto" | "gemma-3" | "gemma-4")}
+              onChange={(e) => setModel(e.target.value as "fallback" | "gemma-4")}
               disabled={busy}
               className="text-sm rounded-xl border border-slate-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              title="Choose the AI model. Gemma runs on AMD infrastructure through Fireworks AI."
+              title="Choose the AI model. Gemma 4 runs on AMD infrastructure through Fireworks AI; Fallback uses fast DeepSeek V4 Flash serverless."
             >
               <option value="gemma-4">Gemma 4 · AMD/Fireworks</option>
-              <option value="gemma-3">Gemma 3 · AMD/Fireworks</option>
-              <option value="auto">Auto (DeepSeek/Kimi)</option>
+              <option value="fallback">Fallback · DeepSeek V4 Flash</option>
             </select>
           </div>
         </header>

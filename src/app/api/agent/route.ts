@@ -8,8 +8,9 @@ import {
   teachingAgent,
   memoryAgent,
   visualDesignerAgent,
+  studentReplyReview,
 } from "@/lib/agents";
-import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack } from "@/lib/types";
+import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack, Subject, Topic } from "@/lib/types";
 import { ModelRuntime } from "@/lib/fireworks";
 import { startRun, logStep } from "@/lib/agent-events";
 import {
@@ -33,6 +34,7 @@ const RETRIEVAL_INTENTS = [
   "make_flashcards",
   "make_reviewer",
   "make_quiz",
+  "make_summary",
   "make_story",
   "continue_learning",
 ];
@@ -43,6 +45,7 @@ const VALID_INTENTS = new Set([
   "make_flashcards",
   "make_reviewer",
   "make_quiz",
+  "make_summary",
   "make_story",
   "make_visual",
   "retrieve_material",
@@ -64,6 +67,78 @@ function summarizeNotes(text: string, maxLength = 160): string {
   const firstSentence = text.split(/[.!?]\s+/)[0].trim();
   if (firstSentence.length > 0 && firstSentence.length <= maxLength) return firstSentence;
   return text.slice(0, maxLength).trim() + (text.length > maxLength ? "..." : "");
+}
+
+function buildStudyPackConfirmation(
+  classification: { subject: string; subcategory: string; topic: string },
+  studyPack: StudyPack,
+  topicId: string,
+  withAlignmentQuestion = true
+): string {
+  const lines = [
+    `I organized this under:`,
+    `**${classification.subject} → ${classification.subcategory} → ${classification.topic}**`,
+    "",
+    "I created:",
+    "✓ Clean Notes",
+    "✓ Reviewer",
+    "✓ Flashcards",
+    "✓ Quiz",
+    "✓ Summary",
+  ];
+  if (studyPack.story) lines.push("✓ Story");
+  lines.push("");
+  lines.push("I also started your mastery map.");
+  if (withAlignmentQuestion) {
+    lines.push("");
+    lines.push("Does this match what your teacher discussed?");
+    lines.push("[Yes] [Partly] [No] [Add more notes]");
+  }
+  lines.push("");
+  lines.push(`Open your study pack: /topic/${topicId}`);
+  return lines.join("\n");
+}
+
+function buildUploadConfirmation(
+  attachmentType: string,
+  classification: { subject: string; subcategory: string; topic: string },
+  topicId: string,
+  withAlignmentQuestion = true
+): string {
+  const fileLabel = attachmentType === "pdf" ? "PDF" : "image";
+  const lines = [
+    `Got your ${fileLabel} notes.`,
+    "",
+    `I saved them in your Library under:`,
+    `**${classification.subject} → ${classification.subcategory} → ${classification.topic}**`,
+    "",
+    "I created:",
+    "✓ Clean Notes",
+    "✓ Reviewer",
+    "✓ Flashcards",
+    "✓ Quiz",
+    "✓ Summary",
+    "",
+    "I also started your mastery map.",
+  ];
+  if (withAlignmentQuestion) {
+    lines.push("");
+    lines.push("Does this match what your teacher discussed?");
+    lines.push("[Yes] [Partly] [No] [Add more notes]");
+  }
+  return lines.join("\n");
+}
+
+function detectTeacherAlignmentResponse(message: string, history: ChatMessage[]): "yes" | "partly" | "no" | null {
+  const lastAssistant = [...history].reverse().find((m) => m.role === "assistant");
+  if (!lastAssistant || !lastAssistant.content.includes("Does this match what your teacher discussed?")) {
+    return null;
+  }
+  const lower = message.toLowerCase().trim();
+  if (/\b(yes|yeah|yep|oo|tama|correct|right|sure|yes,? this is)\b/i.test(lower)) return "yes";
+  if (/\b(partly|partial|some|some parts|missing|incomplete)\b/i.test(lower)) return "partly";
+  if (/\b(no|nope|dili|hindi|wrong|different)\b/i.test(lower)) return "no";
+  return null;
 }
 
 async function getLastActiveTopic(userId: string): Promise<ActiveTopic | null> {
@@ -97,10 +172,17 @@ function normalizeClassification(
 
   // Strong visual guard: if the student explicitly asks for a visual/diagram/picture, force make_visual.
   const lowerOriginal = originalMessage.toLowerCase();
-  if (/(show me a|give me a|draw a|make a|create a)?\s*(visual|diagram|infographic|chart|picture|illustration|drawing|graph|image)/i.test(originalMessage) ||
-      /(diagram of|illustration of|picture of|image of|visual of|infographic of)/i.test(originalMessage)) {
+  const visualKeywords = /(visual|diagram|infographic|chart|picture|illustration|drawing|graph|image)/i;
+  const visualAction = /(show|give|draw|make|create|want|need)/i;
+  if (visualAction.test(originalMessage) && visualKeywords.test(originalMessage)) {
     intent = "make_visual";
     logStep(requestId, "classify", "Visual request detected, forcing make_visual intent", "done");
+  }
+
+  // Strong summary guard: if the student asks for a summary/recap/overview, force make_summary.
+  if (/\b(summary|summarize|recap|overview|main points|key points)\b/i.test(lowerOriginal)) {
+    intent = "make_summary";
+    logStep(requestId, "classify", "Summary request detected, forcing make_summary intent", "done");
   }
 
   const message = classification.topic || "";
@@ -231,6 +313,7 @@ function mapIntentToType(intent: string, message: string): string | null {
   if (intent === "make_flashcards") return "flashcards";
   if (intent === "make_quiz") return "quiz";
   if (intent === "make_reviewer") return "reviewer";
+  if (intent === "make_summary") return "summary";
   if (intent === "make_story") return "story";
   if (intent === "retrieve_material") {
     const lower = message.toLowerCase();
@@ -276,8 +359,8 @@ function buildRetrievalInteractive(
     }
   }
 
-  if (type === "reviewer") {
-    const found = materials.find((m) => m.type === "reviewer");
+  if (type === "reviewer" || type === "summary") {
+    const found = materials.find((m) => m.type === type);
     const text = found?.content?.text;
     if (text) {
       const cards = text
@@ -289,6 +372,14 @@ function buildRetrievalInteractive(
       if (cards.length > 0) {
         return { type: "info_cards", topic: topicTitle, topicId, cards };
       }
+    }
+  }
+
+  if (type === "story") {
+    const found = materials.find((m) => m.type === "story");
+    const text = found?.content?.text;
+    if (text) {
+      return { type: "info_cards", topic: topicTitle, topicId, cards: [{ icon: "📖", title: "Story", body: text }] };
     }
   }
 
@@ -431,8 +522,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, attachmentType, model } = body;
-    const preferredModel = model === "gemma-3" || model === "gemma-4" ? model : "auto";
+    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, attachmentType, model, topicId: providedTopicId } = body;
+    const preferredModel =
+      model === "gemma-3" || model === "gemma-4" || model === "fallback"
+        ? model
+        : "auto";
 
     if (!userId || !message) {
       return NextResponse.json({ error: "Missing userId or message", model_runtime: modelRuntime }, { status: 400 });
@@ -441,6 +535,27 @@ export async function POST(req: NextRequest) {
     const requestId = clientRequestId || `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startRun(requestId, userId, message);
     logStep(requestId, "start", "Received student message", "done", { messageLength: message.length });
+
+    // Load explicitly provided topic (from the client) so follow-ups stay in context.
+    let providedTopic: Topic | null = null;
+    let providedSubject: Subject | null = null;
+    if (providedTopicId) {
+      const { data: pt } = await supabaseAdmin!
+        .from("topics")
+        .select("*")
+        .eq("id", providedTopicId)
+        .maybeSingle();
+      if (pt) {
+        providedTopic = pt as Topic;
+        const { data: ps } = await supabaseAdmin!
+          .from("subjects")
+          .select("id, name")
+          .eq("id", pt.subject_id)
+          .maybeSingle();
+        providedSubject = (ps as Subject) || null;
+        logStep(requestId, "profile", `Client provided topic: ${providedSubject?.name || "unknown"} → ${pt.title}`, "done", { topicId: pt.id });
+      }
+    }
 
     // 1. Load recent conversation history for this user (across all topics)
     logStep(requestId, "profile", "Loading conversation history", "running");
@@ -469,6 +584,17 @@ export async function POST(req: NextRequest) {
     logStep(requestId, "classify", "Classifier Agent: detecting subject, topic & intent", "running");
     let classification = await classifierAgent(message, history, preferredModel);
     classification = normalizeClassification(requestId, classification, lastActiveTopic, message);
+
+    // If the client sent an explicit topicId, lock the conversation to that topic.
+    if (providedTopic && providedSubject) {
+      classification = {
+        ...classification,
+        subject: providedSubject.name,
+        subcategory: (providedTopic.subcategory as string) || classification.subcategory,
+        topic: (providedTopic.title as string) || classification.topic,
+      };
+      logStep(requestId, "classify", `Locked to provided topic: ${classification.subject} → ${classification.subcategory} → ${classification.topic}`, "done", { classification });
+    }
 
     // If this message is a quiz follow-up, keep the quiz topic so feedback stays in context.
     if (quizResult?.topic) {
@@ -613,57 +739,96 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Find or create subject (case-insensitive to avoid duplicates)
-    logStep(requestId, "subject", `Finding or creating subject: ${classification.subject}`, "running");
-    const { data: subjects } = await supabaseAdmin!
-      .from("subjects")
-      .select("*")
-      .eq("user_id", userId)
-      .ilike("name", classification.subject)
-      .limit(1);
-    let subject = subjects?.[0];
-
-    if (!subject) {
-      const { data: newSubject, error: subjErr } = await supabaseAdmin!
+    let subject: Subject | null = null;
+    if (providedSubject) {
+      subject = providedSubject;
+      logStep(requestId, "subject", `Using client-provided subject: ${subject.name}`, "done", { subjectId: subject.id });
+    } else {
+      logStep(requestId, "subject", `Finding or creating subject: ${classification.subject}`, "running");
+      const { data: subjects } = await supabaseAdmin!
         .from("subjects")
-        .insert({ user_id: userId, name: classification.subject })
-        .select()
-        .single();
-      if (subjErr) throw subjErr;
-      subject = newSubject;
+        .select("*")
+        .eq("user_id", userId)
+        .ilike("name", classification.subject)
+        .limit(1);
+      subject = subjects?.[0] || null;
+
+      if (!subject) {
+        const { data: newSubject, error: subjErr } = await supabaseAdmin!
+          .from("subjects")
+          .insert({ user_id: userId, name: classification.subject })
+          .select()
+          .single();
+        if (subjErr) throw subjErr;
+        subject = newSubject;
+      }
     }
+    if (!subject) throw new Error("Subject could not be resolved");
     logStep(requestId, "subject", `Subject ready: ${subject.name}`, "done", { subjectId: subject.id });
 
     // 5. Find or create topic (case-insensitive to avoid duplicates)
-    logStep(requestId, "topic", `Finding or creating topic: ${classification.topic}`, "running");
-    const { data: topics } = await supabaseAdmin!
-      .from("topics")
-      .select("*")
-      .eq("subject_id", subject.id)
-      .ilike("title", classification.topic)
-      .limit(1);
-    let topic = topics?.[0];
-
-    if (!topic) {
-      const { data: newTopic, error: topicErr } = await supabaseAdmin!
-        .from("topics")
-        .insert({
-          subject_id: subject.id,
-          title: classification.topic,
-          subcategory: classification.subcategory,
-          curriculum_match: curriculum,
-          last_studied_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-      if (topicErr) throw topicErr;
-      topic = newTopic;
-    } else {
+    let topic: Topic | null = null;
+    if (providedTopic) {
+      topic = providedTopic;
       await supabaseAdmin!
         .from("topics")
         .update({ last_studied_at: new Date().toISOString() })
-        .eq("id", topic.id);
+        .eq("id", topic.id as string);
+      logStep(requestId, "topic", `Using client-provided topic: ${topic.title}`, "done", { topicId: topic.id });
+    } else {
+      logStep(requestId, "topic", `Finding or creating topic: ${classification.topic}`, "running");
+      const { data: topics } = await supabaseAdmin!
+        .from("topics")
+        .select("*")
+        .eq("subject_id", subject.id)
+        .ilike("title", classification.topic)
+        .limit(1);
+      topic = topics?.[0] || null;
+
+      if (!topic) {
+        const { data: newTopic, error: topicErr } = await supabaseAdmin!
+          .from("topics")
+          .insert({
+            subject_id: subject.id,
+            title: classification.topic,
+            subcategory: classification.subcategory,
+            curriculum_match: curriculum,
+            last_studied_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (topicErr) throw topicErr;
+        topic = newTopic as Topic;
+      } else {
+        await supabaseAdmin!
+          .from("topics")
+          .update({ last_studied_at: new Date().toISOString() })
+          .eq("id", topic.id);
+      }
     }
     logStep(requestId, "topic", `Topic ready: ${topic.title}`, "done", { topicId: topic.id });
+
+    // Teacher-alignment confirmation handling.
+    const alignmentResponse = detectTeacherAlignmentResponse(message, history);
+    if (alignmentResponse && topic) {
+      let alignmentReply = "";
+      if (alignmentResponse === "yes") {
+        await supabaseAdmin!
+          .from("topics")
+          .update({ teacher_confirmed: true, last_studied_at: new Date().toISOString() })
+          .eq("id", topic.id);
+        alignmentReply = `Great. I’ll treat this as your confirmed class lesson.\n\nI’ll keep future explanations, quizzes, and reviewers focused on this lesson unless you ask for an advanced explanation.`;
+      } else if (alignmentResponse === "partly") {
+        alignmentReply = `Thanks for letting me know. What’s missing from your class lesson? Send me the missing notes or topics and I’ll update your study pack.`;
+      } else if (alignmentResponse === "no") {
+        alignmentReply = `Thanks for the correction. What topic did your teacher actually discuss? Send me the lesson title or notes and I’ll rebuild your study pack.`;
+      }
+
+      await supabaseAdmin!.from("messages").insert({ user_id: userId, topic_id: topic.id, role: "user", content: message });
+      await supabaseAdmin!.from("messages").insert({ user_id: userId, topic_id: topic.id, role: "assistant", content: alignmentReply });
+      logStep(requestId, "save_reply", "Teacher-alignment reply saved", "done");
+      return NextResponse.json({ requestId, reply: alignmentReply, classification, curriculum, topic, materials_created: [], saved_materials: [], interactive: null, memory_update: null, model_runtime: modelRuntime });
+    }
 
     // 6. Save original notes
     await supabaseAdmin!.from("messages").insert({
@@ -835,16 +1000,29 @@ export async function POST(req: NextRequest) {
       materials_created = savedMaterials.map((m) => m.type);
       logStep(requestId, "create_materials", `Study pack saved (${materials_created.length} material types)`, "done", { materials_created });
 
-      const teachingQuizResult = quizResult
-        ? { ...quizResult, topic: classification.topic }
-        : null;
-
-      logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; }, imageUrl);
-      logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
-      if (!reply || reply.length < 10) {
-        reply = `I organized this under ${classification.subject} → ${classification.subcategory} → ${classification.topic}.\n\nThis matches your ${curriculum.grade_level} ${classification.subject} learning path.\n\nI created:\n✓ Clean Notes\n✓ Reviewer\n✓ Flashcards\n✓ Quiz\n✓ Summary${studyPack.story ? "\n✓ Story" : ""}`;
+      // Save the school-aligned lesson boundary and initial mastery map.
+      const coreConcepts = studyPack.lesson_scope?.core_concepts?.length
+        ? studyPack.lesson_scope.core_concepts
+        : curriculum.competency
+          ? [curriculum.competency]
+          : [`Understand ${classification.topic}`];
+      const masteryMap: Record<string, string> = {};
+      for (const concept of coreConcepts) {
+        masteryMap[concept] = "started";
       }
+      await supabaseAdmin!
+        .from("topics")
+        .update({
+          lesson_scope: { confirmed_by_student: false, core_concepts: coreConcepts },
+          outside_scope: studyPack.outside_scope || { advanced_concepts: [] },
+          mastery_map: masteryMap,
+          teacher_confirmed: false,
+          last_studied_at: new Date().toISOString(),
+        })
+        .eq("id", topic.id);
+
+      reply = buildStudyPackConfirmation(classification, studyPack, topic.id);
+      logStep(requestId, "teach", "Study pack confirmation reply ready", "done", { replyLength: reply.length });
     }
 
     if (imageUrl) {
@@ -889,9 +1067,66 @@ export async function POST(req: NextRequest) {
         materials_created.push(uploadMaterialType);
       }
 
-      if (!reply) {
-        reply = getUploadConfirmation(attachmentType, history);
+      // Auto-create a full study pack from uploaded notes if one doesn't exist yet.
+      const { data: existingCleanNotes } = await supabaseAdmin!
+        .from("materials")
+        .select("id")
+        .eq("topic_id", topic.id)
+        .eq("type", "clean_notes")
+        .maybeSingle();
+
+      if (!existingCleanNotes) {
+        logStep(requestId, "create_materials", "Auto-creating study pack from upload", "running");
+        if (!profileRow) {
+          const { data: p } = await supabaseAdmin!.from("learner_profiles").select("*").eq("user_id", userId).single();
+          profileRow = (p as ProfileRow | null) || null;
+        }
+        studyPack = await materialCreatorAgent(message, classification.topic, curriculum, profileRow || {}, preferredModel);
+
+        const autoMaterialInserts = [
+          { topic_id: topic.id, type: "clean_notes", title: "Clean Notes", content: { text: studyPack.clean_notes } },
+          { topic_id: topic.id, type: "reviewer", title: "Reviewer", content: { text: studyPack.reviewer } },
+          { topic_id: topic.id, type: "flashcards", title: "Flashcards", content: { flashcards: studyPack.flashcards } },
+          { topic_id: topic.id, type: "quiz", title: "Quiz", content: { quiz: studyPack.quiz } },
+          { topic_id: topic.id, type: "summary", title: "Summary", content: { text: studyPack.summary } },
+          ...(studyPack.story ? [{ topic_id: topic.id, type: "story", title: "Story", content: { text: studyPack.story } }] : []),
+        ];
+
+        for (const m of autoMaterialInserts) {
+          const { data: inserted, error } = await supabaseAdmin!
+            .from("materials")
+            .insert(m as unknown as Record<string, unknown>)
+            .select("id, type")
+            .single();
+          if (error) {
+            console.error("Upload auto-create material insert error:", error);
+          } else if (inserted) {
+            savedMaterials.push({ type: inserted.type, id: inserted.id });
+          }
+        }
+
+        const coreConcepts = studyPack.lesson_scope?.core_concepts?.length
+          ? studyPack.lesson_scope.core_concepts
+          : curriculum.competency
+            ? [curriculum.competency]
+            : [`Understand ${classification.topic}`];
+        const masteryMap: Record<string, string> = {};
+        for (const concept of coreConcepts) masteryMap[concept] = "started";
+        await supabaseAdmin!
+          .from("topics")
+          .update({
+            lesson_scope: { confirmed_by_student: false, core_concepts: coreConcepts },
+            outside_scope: studyPack.outside_scope || { advanced_concepts: [] },
+            mastery_map: masteryMap,
+            teacher_confirmed: false,
+          })
+          .eq("id", topic.id);
+
+        materials_created.push("clean_notes", "reviewer", "flashcards", "quiz", "summary", ...(studyPack.story ? ["story"] : []));
+        logStep(requestId, "create_materials", "Study pack auto-created from upload", "done");
       }
+
+      reply = buildUploadConfirmation(attachmentType, classification, topic.id);
     }
 
     if (!interactive && shouldCreateMaterials && topic) {
@@ -911,17 +1146,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Uploaded notes/pictures: reply with a clean summary instead of raw transcription or a generic ack.
-    if (imageUrl && topic) {
-      const summary = summarizeNotes(studyPack?.clean_notes || message);
-      reply = summary
-        ? `Got your notes! I extracted and saved: "${summary}". They're now in your study pack under **${classification.subject} → ${classification.subcategory} → ${classification.topic}**. Want me to make flashcards, a quiz, or a review sheet?`
-        : `Got your notes! I've saved them to your study pack under **${classification.subject} → ${classification.subcategory} → ${classification.topic}**. Want me to make flashcards, a quiz, or a review sheet?`;
+    // Visual requests: keep the reply short so the HTML widget is the star of the response.
+    if (isVisualRequest && interactive) {
+      reply = `Here's an interactive visual for **${classification.topic}**. Tap the cards to flip them!`;
     }
 
     // Visual requests: ensure the HTML widget is generated even if we only taught or had existing materials.
     if (isVisualRequest && topic && !interactive && studyPack) {
       interactive = await visualDesignerAgent(message, topic.id, topic.title, studyPack, classification, preferredModel);
+    }
+
+    // Student-helpfulness review (demo "thinking mode"): polish the final reply before saving.
+    if (reply && classification.intent !== "create_study_pack") {
+      reply = await studentReplyReview(
+        reply,
+        message,
+        classification.topic,
+        curriculum,
+        classification,
+        profileRow || {},
+        preferredModel,
+        (runtime) => { modelRuntime = runtime; }
+      );
     }
 
     // 8. Save AI reply

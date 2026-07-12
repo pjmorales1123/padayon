@@ -38,6 +38,72 @@ function extractJson<T>(content: string): T | null {
   return null;
 }
 
+function cleanTeachingOutput(content: string): string {
+  if (!content) return content;
+  let cleaned = content;
+
+  // Drop the entire leaked "The user wants me to act as..." reasoning block.
+  cleaned = cleaned.replace(/The user wants me to act as[\s\S]*?(?=\n[A-Z][a-z]+,?\s*(?:[^:]|$))/im, "");
+
+  // Strip common meta-commentary / planning prefixes that some reasoning models emit.
+  const metaPatterns = [
+    /^[\s\S]*?(?:Plan:|Draft:|Cebuano draft:|English draft:|Final output:|Now, output the final|Let me refine|This looks good|Wait,)[\r\n]+/im,
+    /\n\s*(?:Plan:|Draft:|Cebuano draft:|English draft:|Final output:|Let me refine|This looks good|Wait,)[\s\S]*$/im,
+    /\*\*(?:Plan|Draft|Final output)\*\*:?[\s\S]*$/im,
+  ];
+  for (const pattern of metaPatterns) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+
+  // Collapse excessive blank lines.
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
+
+  return cleaned;
+}
+
+function validateStudyPack(pack: Partial<StudyPack>): StudyPack {
+  const clean_notes = (pack.clean_notes || "").trim();
+  const reviewer = (pack.reviewer || "").trim();
+  const summary = (pack.summary || "").trim();
+
+  const flashcards = Array.isArray(pack.flashcards) ? pack.flashcards : [];
+  const validFlashcards = flashcards
+    .filter((c) => typeof c.front === "string" && typeof c.back === "string")
+    .map((c) => ({ front: c.front.trim(), back: c.back.trim() }))
+    .filter((c) => c.front.length > 0 && c.back.length > 0);
+
+  const quiz = Array.isArray(pack.quiz) ? pack.quiz : [];
+  const validQuiz = quiz
+    .filter((q) => typeof q.question === "string" && Array.isArray(q.choices) && typeof q.answer === "string")
+    .map((q) => ({
+      question: q.question.trim(),
+      choices: q.choices.map((c: string) => String(c).trim()).slice(0, 4),
+      answer: q.answer.trim(),
+      explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",
+    }))
+    .filter((q) => q.question.length > 0 && q.choices.length === 4 && q.answer.length > 0 && q.choices.includes(q.answer));
+
+  return {
+    clean_notes: clean_notes.length > 20 ? clean_notes : `Clean notes about the topic.`,
+    reviewer: reviewer.length > 20 ? reviewer : `Key points to remember.`,
+    flashcards: validFlashcards.length >= 4 ? validFlashcards : [
+      { front: `What is this topic about?`, back: `It is an important concept we are studying.` },
+      { front: `Why does it matter?`, back: `It helps us understand how things work in class.` },
+      { front: `Can you give an example?`, back: `Your teacher will give examples during the lesson.` },
+      { front: `What should I review?`, back: `Focus on the main idea and key terms.` },
+    ],
+    quiz: validQuiz.length >= 3 ? validQuiz : [
+      { question: `What is the topic we are studying?`, choices: ["A", "B", "C", "D"], answer: "A", explanation: "The topic is introduced in the lesson." },
+      { question: `Why is this topic important?`, choices: ["A", "B", "C", "D"], answer: "A", explanation: "It connects to what you learn in school." },
+      { question: `What should I ask my teacher if confused?`, choices: ["A", "B", "C", "D"], answer: "A", explanation: "Ask for examples from class." },
+    ],
+    summary: summary.length > 10 ? summary : `This topic is part of your class lesson.`,
+    story: pack.story && pack.story.trim().length >= 20 ? pack.story.trim() : undefined,
+    lesson_scope: pack.lesson_scope && Array.isArray(pack.lesson_scope.core_concepts) ? pack.lesson_scope : undefined,
+    outside_scope: pack.outside_scope && Array.isArray(pack.outside_scope.advanced_concepts) ? pack.outside_scope : undefined,
+  };
+}
+
 function formatHistory(history: ChatMessage[]): string {
   if (!history || history.length === 0) return "No previous messages.";
   return history
@@ -129,7 +195,7 @@ Analyze the student input and return ONLY valid JSON with exactly these fields:
 - subject (Science, Math, English, Filipino, ICT, Social Studies, MAPEH, or Unknown)
 - subcategory
 - topic (a short, specific topic title)
-- intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_story, make_visual, retrieve_material, continue_learning, research_topics, unknown)
+- intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_summary, make_story, make_visual, retrieve_material, continue_learning, research_topics, unknown)
 - language_detected (English, Filipino, Cebuano, Cebuano-English mix, Filipino-English mix, Other)
 - confidence (number 0.0-1.0)
 
@@ -137,6 +203,7 @@ Intent rules:
 - Use "teach_topic" when the student is asking a question, wants an explanation, or is just chatting about a topic (e.g., "What is meter?", "explain ezra pound", "let's play a game").
 - Use "create_study_pack" when the student provides messy notes, a list of keywords, or study material to organize (e.g., "photosynthesis chlorophyll sunlight CO2", "irony sarcasm dramatic irony", or a pasted list of terms). Treat keyword dumps and pasted notes as material to organize, not as a question.
 - Use "make_visual" when the student explicitly asks for a visual, diagram, infographic, chart, picture, or illustration of a topic (e.g., "show me a visual for photosynthesis", "diagram of cellular respiration", "infographic for quadratic equations").
+- Use "make_summary" when the student asks for a summary, recap, or overview of the lesson (e.g., "give me a summary", "recap photosynthesis", "lesson summary").
 - Use "retrieve_material" ONLY when the student explicitly asks to see existing saved materials (e.g., "show my flashcards", "where is my quiz", "my summary"). Do NOT use it for general questions like "look at" or "tell me about".
 - Use "continue_learning" when the student clearly returns to a previous topic (e.g., "continue", "go back to").
 - Use "research_topics" when the student missed a lesson, is unsure what topic to study, or asks what was discussed (e.g., "I didn't listen earlier, what did we talk about?", "wala ko nakadungog sa lesson ganina", "show me related topics", "what topics are in this subject?").
@@ -288,6 +355,8 @@ Return ONLY valid JSON with exactly these fields:
 - quiz (array of 3-5 {question, choices: 4 options, answer, explanation})
 - summary (string, 1-2 sentences)
 - story (string, 1 short paragraph that explains the concept through a memorable character or real-life scenario)
+- lesson_scope (object: { confirmed_by_student: false, core_concepts: array of 4-6 short concept names covered by this class lesson })
+- outside_scope (object: { advanced_concepts: array of related concepts that are NOT part of this class lesson })
 
 Use simple English or include Filipino/Cebuano terms only when the learner profile shows high confidence in that language.
 Always include the English academic term (e.g., **photosynthesis**) at least once so the student learns the correct vocabulary.
@@ -309,10 +378,7 @@ Learner profile: ${JSON.stringify(profile)}`;
   );
   const parsed = extractJson<StudyPack>(content);
   if (parsed) {
-    if (!parsed.story || parsed.story.trim().length < 20) {
-      parsed.story = `Imagine a Grade 9 student in the Philippines sitting under a mango tree. A friend asks, "What is ${topic}?" The student explains it using a simple, everyday example, and suddenly the idea clicks. That's the power of a good story.`;
-    }
-    return parsed;
+    return validateStudyPack(parsed);
   }
   // Fallback seeded materials for Photosynthesis demo
   if (topic === "Photosynthesis") {
@@ -385,13 +451,19 @@ The student uploaded a picture of their notes. Extracted text: "${message.replac
 
 Your goal is to help the student understand, not just give answers. Adapt your response to the learner profile below — it works for any student.
 
+CRITICAL RULES:
+- Reply directly to the student.
+- NEVER show your planning, drafts, reasoning, self-corrections, or internal notes.
+- NEVER use labels like "Plan:", "Draft:", "Cebuano draft:", "English:", "Final output:", "Wait," or "Let me".
+- Start your response immediately with the friendly explanation. Output only the final student-facing answer.
+
 How to adapt:
 - Language: First, look at the actual student message. Then check learner profile language_confidence.
-  • The student's message is in ${classification?.language_detected || "English"}. You MUST reply in that language. Do not switch to Cebuano, Filipino, or any other language unless the student's actual message is clearly written in that language.
-  • Reply bilingually (e.g., Cebuano/Filipino + English) ONLY if the profile explicitly shows "High" confidence in BOTH the language the student just used AND another relevant language.
-  • If only one language is "High", reply mainly in that language, but always include the English academic term **${topic}**.
+  • If the student's message is clearly in Filipino or Cebuano, reply mainly in that language.
+  • If the student wrote in English but their profile shows Cebuano or Filipino as "High", give a bilingual reply: explain in the stronger local language first, then give the English version. Always include the English academic term **${topic}**.
+  • If the profile shows only English as "High" (no local language High) or the student explicitly asked for English, reply in English.
+  • Do not switch to Cebuano/Filipino just because the app is for Filipino students — only use it when the student's message or profile justifies it.
   • If there is no profile yet, reply in the language the student actually used.
-  • Do not switch to Cebuano/Filipino just because the app is for Filipino students — only use another language when the student's message justifies it.
 - Learning style: Check learning_style. Use the preferred methods (e.g., analogies, visuals, stories, short steps, real-life examples).
 - Strengths: Build on the student's strengths.
 - Weaknesses: Be gentle and scaffold. If a weakness is mentioned, give extra support in that area.
@@ -410,10 +482,34 @@ Curriculum: ${JSON.stringify(curriculum)}${materialHint}${quizHint}${imageHint}
 Recent conversation:
 ${formatHistory(history)}
 
-Student message: "${message}"`;
+Student message: "${message}"
 
-  const content = await callFireworks([{ role: "user", content: prompt }], false, 2500, model, reportRuntime);
-  if (content && content.trim().length > 10) return content;
+Output ONLY a JSON object in this exact format, with no other text before or after:
+{
+  "reply": "the complete, friendly, student-facing explanation including the guiding question at the end",
+  "question": "the one guiding question you ask at the end"
+}`;
+
+  const content = await callFireworks(
+    [
+      { role: "system", content: "You are a final-output teaching assistant. You never reveal planning, drafts, or reasoning. You only return valid JSON matching the requested schema." },
+      { role: "user", content: prompt },
+    ],
+    true,
+    2500,
+    model,
+    reportRuntime
+  );
+
+  // Try to parse the structured reply first.
+  const parsed = extractJson<{ reply?: string; question?: string }>(content);
+  if (parsed?.reply && parsed.reply.trim().length > 10) {
+    return parsed.reply.trim();
+  }
+
+  // Fallback to text cleanup if the model returned free-form text.
+  const cleaned = cleanTeachingOutput(content);
+  if (cleaned && cleaned.trim().length > 10) return cleaned;
 
   // Fallback for demo
   const lower = message.toLowerCase();
@@ -434,6 +530,71 @@ What are two things plants need for photosynthesis?`;
 ${curriculum.competency}
 
 Can you tell me what you already know about it?`;
+}
+
+export async function studentReplyReview(
+  originalReply: string,
+  message: string,
+  topic: string,
+  curriculum: CurriculumMatch,
+  classification: Classification,
+  profile: Record<string, unknown>,
+  model: ModelPreference = "auto",
+  reportRuntime?: ModelRuntimeReporter
+): Promise<string> {
+  if (!originalReply || originalReply.trim().length < 10) return originalReply;
+
+  const prompt = `You are the "Student Helpfulness Reviewer" for PADAYON, an AI learning partner for Grade 9 students in the Philippines.
+
+Your ONE job: read the AI's draft reply below and decide if it actually helps the student. If it does, return it mostly unchanged. If it doesn't, rewrite it to be more helpful.
+
+Common problems to fix:
+- Claims the student "already learned" something we don't know they learned.
+- Asks a question that is irrelevant, too hard, or unrelated to what the student asked.
+- Explanation is too complex, uses jargon, or skips the basics.
+- Examples are confusing or not relatable to a Filipino Grade 9 student.
+- Uses Bisaya/Cebuano words that are too deep or obscure; keep it simple and natural.
+- Adds unverified facts or hallucinates details not in the curriculum.
+- Sounds robotic, preachy, or discouraging.
+
+Rules for the rewrite:
+- Keep the same language mix the draft uses (English, Filipino, Cebuano) unless the draft got it wrong.
+- Keep the English academic term **${topic}** at least once.
+- Use simple, relatable examples (school, family, local context).
+- Ask only ONE relevant guiding question at the end.
+- Do NOT add headings like "Improved reply:". Return only the final text.
+
+Curriculum: ${JSON.stringify(curriculum)}
+Student message: "${message.replace(/"/g, '\\"')}"
+Draft reply:
+"""
+${originalReply}
+"""
+
+Return ONLY a JSON object:
+{"improved_reply": "the final reply, or the original if no changes needed"}`;
+
+  try {
+    const content = await callFireworks(
+      [
+        { role: "system", content: "You review student-facing replies and return only valid JSON with an improved_reply field." },
+        { role: "user", content: prompt },
+      ],
+      true,
+      2500,
+      model,
+      reportRuntime
+    );
+
+    const parsed = extractJson<{ improved_reply?: string }>(content);
+    if (parsed?.improved_reply && parsed.improved_reply.trim().length > 10) {
+      return parsed.improved_reply.trim();
+    }
+  } catch (err) {
+    console.error("studentReplyReview failed", err);
+  }
+
+  return originalReply;
 }
 
 export async function memoryAgent(
