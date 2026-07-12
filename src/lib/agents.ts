@@ -660,14 +660,14 @@ Current profile: ${JSON.stringify(profile)}`;
   };
 }
 
-const VISUAL_LLM_TIMEOUT_MS = 12000;
+const VISUAL_LLM_TIMEOUT_MS = 20000;
 
 const VISUAL_SYSTEM_PROMPT = `You are an expert visual designer and front-end developer. Your job is to turn a lesson topic into a single HTML visual that looks like a Canva Code infographic.
 
 Rules:
 - Return ONLY valid JSON with this shape: {"title": "...", "html": "..."}
 - The html value must be a complete <!DOCTYPE html> document.
-- Load Tailwind CSS from https://cdn.tailwindcss.com in the <head>.
+- Load Tailwind CSS with this exact tag in the <head>: <script src="https://cdn.tailwindcss.com"></script>.
 - Load a clean font such as DM Sans or Inter from Google Fonts.
 - Use emoji as large visual icons at the top of each concept card (e.g., 👤⚔️👤, 🧠💭, 👤🆚🌍).
 - Lay out concepts as a responsive grid of rounded cards with soft shadows and pastel backgrounds.
@@ -704,7 +704,7 @@ Flashcards to include as mini summary boxes:
 ${flashcards}
 
 Design requirements (Canva Code style):
-1. Use Tailwind CSS classes for layout, spacing, colors, rounded corners, and shadows.
+1. Use Tailwind CSS classes for layout, spacing, colors, rounded corners, and shadows. Load Tailwind with <script src="https://cdn.tailwindcss.com"></script>.
 2. Display each main concept as a rounded card in a responsive grid (1 col on mobile, 2-3 cols on larger screens).
 3. Place a large emoji icon (or emoji combo) at the top of every card to represent the concept visually.
 4. Add a bold card title and a one-sentence description below the icon.
@@ -792,6 +792,14 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
+function normalizeVisualHtml(html: string): string {
+  // Models sometimes load Tailwind as a stylesheet link instead of a script.
+  return html.replace(
+    /<link[^>]+href=["']https:\/\/cdn\.tailwindcss\.com["'][^>]*>/gi,
+    '<script src="https://cdn.tailwindcss.com"></script>'
+  );
+}
+
 export async function htmlVisualAgent(
   topic: string,
   studyPack: StudyPack,
@@ -807,7 +815,7 @@ export async function htmlVisualAgent(
         { role: "user", content: userPrompt },
       ],
       true,
-      2000,
+      2500,
       model
     );
 
@@ -819,7 +827,7 @@ export async function htmlVisualAgent(
     const parsed = extractJson<{ title: string; html: string }>(content);
 
     if (parsed?.html && parsed.html.trim().length > 200) {
-      let html = parsed.html.trim();
+      let html = normalizeVisualHtml(parsed.html.trim());
       if (!html.toLowerCase().startsWith("<!doctype")) {
         html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${escapeHtml(parsed.title || topic)}</title>\n<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,\\"Segoe UI\\",Roboto,sans-serif;margin:0;padding:16px;background:#f8fafc;}</style>\n</head>\n<body>\n${html}\n</body>\n</html>`;
       }

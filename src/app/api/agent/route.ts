@@ -24,6 +24,8 @@ import {
   shouldPersistTopicForTurn,
 } from "@/lib/agent-routing";
 
+export const maxDuration = 30;
+
 interface MaterialContent {
   text?: string;
   reviewer?: string;
