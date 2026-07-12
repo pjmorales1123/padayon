@@ -1185,9 +1185,9 @@ export async function POST(req: NextRequest) {
       logStep(requestId, "mastery", `Mastery updated to ${newProgress.confidence}% (${newProgress.status})`, "done", { progress: newProgress });
     }
 
-    // 10. Update learner profile in the background so the user doesn't wait
-    if (shouldCreateMaterials || shouldTeach) {
-      applyMemoryUpdate(requestId, userId, message, quizResult, classification, profileRow, preferredModel);
+    // 10. Update learner profile so the demo reflects preference changes (visuals, language, etc.)
+    if (shouldCreateMaterials || shouldTeach || isVisualRequest) {
+      await applyMemoryUpdate(requestId, userId, message, quizResult, classification, profileRow, preferredModel);
     }
 
     logStep(requestId, "finish", "Response complete", "done", { materials_created });

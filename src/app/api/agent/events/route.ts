@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       const send = (event: AgentEvent, run: AgentRun) => {
         try {
           const payload = JSON.stringify({ event, run });
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       };
 
       // Replay existing events
-      const existingRun = getRun(requestId);
+      const existingRun = await getRun(requestId);
       if (existingRun) {
         existingRun.events.forEach((event) => send(event, existingRun));
       }
@@ -40,8 +40,8 @@ export async function GET(req: NextRequest) {
       };
 
       // Auto-close once the run finishes or errors
-      const checkInterval = setInterval(() => {
-        const run = getRun(requestId);
+      const checkInterval = setInterval(async () => {
+        const run = await getRun(requestId);
         if (run && run.events.length > 0) {
           const last = run.events[run.events.length - 1];
           if (last && (last.step === "finish" || last.status === "error")) {

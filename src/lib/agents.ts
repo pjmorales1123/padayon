@@ -465,7 +465,7 @@ How to adapt:
   • If the profile shows only English as "High" (no local language High) or the student explicitly asked for English, reply in English.
   • Do not switch to Cebuano/Filipino just because the app is for Filipino students — only use it when the student's message or profile justifies it.
   • If there is no profile yet, reply in the language the student actually used.
-- Learning style: Check learning_style. Use the preferred methods (e.g., analogies, visuals, stories, short steps, real-life examples).
+- Learning style: Check learning_style. Use the preferred methods (e.g., analogies, visuals, stories, short steps, real-life examples). If learning_style includes "visuals" or "visual examples", proactively offer to create a visual, diagram, or infographic for the topic and end with a question like "Would you like me to make a visual for this?"
 - Strengths: Build on the student's strengths.
 - Weaknesses: Be gentle and scaffold. If a weakness is mentioned, give extra support in that area.
 - Motivation: If the student sounds frustrated, unmotivated, or discouraged, be warm and encouraging. Break the idea into tiny, doable steps and celebrate effort.
@@ -612,6 +612,7 @@ Rules:
 - If the student explicitly says they are NOT good at a language (e.g. "I am not good at English", "hindi ako magaling sa English"), set language_confidence_update to "English: Low" or the relevant language to "Low". Do not contradict the student.
 - If the student asks to switch languages (e.g. "explain in Filipino", "sa Cebuano ko sabta"), set language_confidence_update to reflect the requested language as the preferred one (e.g. "Filipino: High" or "Cebuano: High").
 - Only infer learning style, strengths, and weaknesses from this single message or the provided quiz result. Do not hallucinate.
+- If the student asks for a visual, diagram, picture, infographic, chart, or example they can see, set learning_style_update to include "visuals" or "visual examples".
 - If the student corrects an existing profile entry, update it.
 - student_note is only for a short fact, goal, feeling, score, or class event the student explicitly states (for example, "Got a low score in a Math quiz" or "Wants to learn Biology"). Otherwise return an empty string. Never infer it, never save sensitive details, and never save an upload's contents as a personal note.
 

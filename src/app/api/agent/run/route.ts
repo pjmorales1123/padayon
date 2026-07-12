@@ -4,7 +4,7 @@ import { getRun, getAllRuns } from "@/lib/agent-events";
 export async function GET(req: NextRequest) {
   const requestId = req.nextUrl.searchParams.get("requestId");
   if (requestId) {
-    const run = getRun(requestId);
+    const run = await getRun(requestId);
     if (!run) {
       return NextResponse.json({ run: null }, { status: 404 });
     }
@@ -12,5 +12,6 @@ export async function GET(req: NextRequest) {
   }
 
   const limit = parseInt(req.nextUrl.searchParams.get("limit") || "50", 10);
-  return NextResponse.json({ runs: getAllRuns(limit) });
+  const runs = await getAllRuns(limit);
+  return NextResponse.json({ runs });
 }
