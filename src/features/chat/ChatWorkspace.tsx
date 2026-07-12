@@ -20,12 +20,10 @@ interface ChatMessage {
   imageUrl?: string;
 }
 
-const SUGGESTIONS = [
-  "Explain photosynthesis like I'm 10",
-  "Make flashcards for photosynthesis",
-  "Quiz me on quadratic equations",
-  "Tell me a story about cellular respiration",
-  "Show me a visual for photosynthesis",
+const CHECK_IN_PROMPTS = [
+  "I want to learn about...",
+  "My day at school was...",
+  "Please remember that...",
 ];
 
 const MAX_UPLOAD_FILES = 10;
@@ -133,10 +131,6 @@ export default function ChatWorkspace({
   useEffect(() => {
     inputRef.current = input;
   }, [input]);
-
-  useEffect(() => {
-    setCurrentTopicId(topicId);
-  }, [topicId]);
 
   useEffect(() => {
     fetch(`/api/profile?userId=${encodeURIComponent(userId)}`)
@@ -634,27 +628,29 @@ export default function ChatWorkspace({
                   </button>
                 </div>
               )}
-              <div className="inline-block rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-6 text-left mb-6">
-                <h2 className="text-lg font-bold text-slate-900 mb-2">What can PADAYON do?</h2>
-                <ul className="text-sm text-slate-700 space-y-1 list-disc list-inside">
-                  <li>Explain topics in English, Filipino, or Cebuano</li>
-                  <li>Auto-build flashcards, quizzes, reviewers & stories</li>
-                  <li>Adapt to your learning style and pace</li>
-                  <li>Organize everything in your personal library</li>
-                </ul>
+              <div className="inline-block rounded-2xl bg-blue-50 border border-blue-100 p-5 text-left mb-4">
+                <h2 className="text-lg font-bold text-slate-900 mb-1">Hi, {userName}.</h2>
+                <p className="text-sm text-slate-600">Tell me what you want to learn, how your day went, or send your notes when you&apos;re ready.</p>
               </div>
-              <p className="text-slate-500 text-sm mb-3">Try asking:</p>
               <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTIONS.map((s) => (
+                {CHECK_IN_PROMPTS.map((prompt) => (
                   <button
-                    key={s}
-                    onClick={() => send(s)}
+                    key={prompt}
+                    onClick={() => setInput(prompt)}
                     disabled={busy}
                     className="rounded-full bg-white border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:border-blue-200 transition disabled:opacity-50"
                   >
-                    {s}
+                    {prompt}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy}
+                  className="rounded-full bg-white border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:border-blue-200 transition disabled:opacity-50"
+                >
+                  Send notes or materials
+                </button>
               </div>
             </div>
           )}

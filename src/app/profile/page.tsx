@@ -2,6 +2,8 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import { removeStudentNote, type StudentNote } from "@/lib/student-memory";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -18,6 +20,7 @@ interface Profile {
   strengths: string[];
   weaknesses: string[];
   study_habits: Record<string, string>;
+  student_notes: StudentNote[];
 }
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
@@ -44,6 +47,7 @@ function ProfileInner() {
   const [strengths, setStrengths] = useState<string>("");
   const [weaknesses, setWeaknesses] = useState<string>("");
   const [studyHabits, setStudyHabits] = useState<Record<string, string>>({});
+  const [studentNotes, setStudentNotes] = useState<StudentNote[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +68,7 @@ function ProfileInner() {
           setStrengths((d.profile.strengths || []).join("\n"));
           setWeaknesses((d.profile.weaknesses || []).join("\n"));
           setStudyHabits(d.profile.study_habits || {});
+          setStudentNotes(d.profile.student_notes || []);
         }
       })
       .catch((err) => {
@@ -93,6 +98,7 @@ function ProfileInner() {
           strengths: strengths.split("\n").map((s) => s.trim()).filter(Boolean),
           weaknesses: weaknesses.split("\n").map((s) => s.trim()).filter(Boolean),
           study_habits: studyHabits,
+          student_notes: studentNotes,
         }),
       });
       const data = await res.json();
@@ -101,6 +107,7 @@ function ProfileInner() {
         return;
       }
       setProfile(data.profile);
+      setStudentNotes(data.profile.student_notes || []);
       setSaved(true);
       setIsEditing(false);
     } catch (err) {
@@ -178,6 +185,37 @@ function ProfileInner() {
             ) : (
               <p className="text-slate-800">{displayName}</p>
             )}
+          </div>
+
+          <div className="rounded-2xl bg-white border border-slate-200 p-5">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-1">
+              Things PADAYON remembers
+            </h2>
+            <p className="mb-3 text-sm text-slate-500">Only facts and goals you share in chat. You can remove any note.</p>
+            {studentNotes.length === 0 ? (
+              <p className="text-slate-400">No personal notes saved yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {studentNotes.map((note) => (
+                  <li key={note.id} className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-slate-800">
+                    <span>{note.text}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStudentNotes((notes) => removeStudentNote(notes, note.id));
+                        setIsEditing(true);
+                      }}
+                      className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-700"
+                      aria-label={`Remove memory: ${note.text}`}
+                      title="Remove this memory"
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {isEditing && <p className="mt-3 text-xs text-slate-500">Save Profile to keep removals.</p>}
           </div>
 
           <div className="rounded-2xl bg-white border border-slate-200 p-5">

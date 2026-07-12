@@ -53,6 +53,7 @@ export interface MemoryUpdate {
   weakness_update: string;
   strength_update: string;
   next_recommended_action: string;
+  student_note: string;
 }
 
 export interface LearnerProfile {
@@ -63,6 +64,7 @@ export interface LearnerProfile {
   strengths: string[];
   weaknesses: string[];
   study_habits: Record<string, string>;
+  student_notes: import("./student-memory").StudentNote[];
   updated_at: string;
 }
 

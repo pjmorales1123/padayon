@@ -433,7 +433,7 @@ export async function teachingAgent(
 ): Promise<string> {
   const materialHint = studyPack
     ? imageUrl
-      ? `\n\nStudy materials were organized from the uploaded picture. Briefly summarize the extracted notes in your own words, confirm they were saved, and offer to make flashcards, a quiz, or a review sheet if the student wants.`
+      ? `\n\nStudy materials were organized from the uploaded picture. Briefly confirm the notes were saved, but do not summarize them, infer what the student wants to study, or automatically propose study materials. Ask what they would like to do with these notes.`
       : `\n\nStudy materials were organized for this topic. Only mention them if the student asked for them. Do not say "your flashcards are ready" or push the quiz unless the student explicitly asked for flashcards or a quiz. You may briefly say the topic is saved in their study pack if relevant.`
     : "";
 
@@ -444,7 +444,7 @@ export async function teachingAgent(
   const imageHint = imageUrl
     ? `
 
-The student uploaded a picture of their notes. Extracted text: "${message.replace(/"/g, '\"')}". In your reply you MUST: (1) acknowledge you received the notes, (2) summarize the extracted text in 2-3 short sentences, and (3) confirm the notes were saved to the study pack. Do not say you cannot see images.`
+The student uploaded a picture of their notes. Extracted text: "${message.replace(/"/g, '\"')}". In your reply, acknowledge receipt and confirm the notes were saved. Do not summarize the notes or infer why they uploaded them. Ask one short question about what they want to do with the notes. Do not say you cannot see images.`
     : "";
 
   const prompt = `You are the Teaching Agent for PADAYON, an AI learning partner for Grade 9 students in the Philippines.
@@ -612,6 +612,7 @@ Rules:
 - If the student asks to switch languages (e.g. "explain in Filipino", "sa Cebuano ko sabta"), set language_confidence_update to reflect the requested language as the preferred one (e.g. "Filipino: High" or "Cebuano: High").
 - Only infer learning style, strengths, and weaknesses from this single message or the provided quiz result. Do not hallucinate.
 - If the student corrects an existing profile entry, update it.
+- student_note is only for a short fact, goal, feeling, score, or class event the student explicitly states (for example, "Got a low score in a Math quiz" or "Wants to learn Biology"). Otherwise return an empty string. Never infer it, never save sensitive details, and never save an upload's contents as a personal note.
 
 Return ONLY valid JSON with these exact string fields:
 - learning_style_update: string (one short phrase, e.g. "visuals, analogies")
@@ -619,8 +620,9 @@ Return ONLY valid JSON with these exact string fields:
 - weakness_update: string (specific, short)
 - strength_update: string (specific, short)
 - next_recommended_action: string (specific next step for the student)
+- student_note: string (one explicit student-shared note, or an empty string)
 
-All five values must be plain strings, not arrays or objects.
+All six values must be plain strings, not arrays or objects.
 
 Student message: "${message}"
 Quiz result: ${JSON.stringify(quizResult)}
@@ -644,6 +646,7 @@ Current profile: ${JSON.stringify(profile)}`;
       weakness_update: Array.isArray(parsed.weakness_update) ? parsed.weakness_update.join(" ") : String(parsed.weakness_update || ""),
       strength_update: Array.isArray(parsed.strength_update) ? parsed.strength_update.join(" ") : String(parsed.strength_update || ""),
       next_recommended_action: Array.isArray(parsed.next_recommended_action) ? parsed.next_recommended_action.join(" ") : String(parsed.next_recommended_action || ""),
+      student_note: Array.isArray(parsed.student_note) ? parsed.student_note.join(" ") : String(parsed.student_note || ""),
     };
   }
   return {
@@ -651,7 +654,8 @@ Current profile: ${JSON.stringify(profile)}`;
     language_confidence_update: "Use Cebuano-first explanation for new Science topics",
     weakness_update: "Needs review on process order in Photosynthesis",
     strength_update: "Understands better with real-life examples",
-    next_recommended_action: "Review flashcards for Photosynthesis"
+    next_recommended_action: "Review flashcards for Photosynthesis",
+    student_note: ""
   };
 }
 

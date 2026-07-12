@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { userId, name, language_confidence, learning_style, strengths, weaknesses, study_habits } =
+    const { userId, name, language_confidence, learning_style, strengths, weaknesses, study_habits, student_notes } =
       await req.json();
 
     if (!userId) {
@@ -60,6 +60,7 @@ export async function PUT(req: NextRequest) {
     if (Array.isArray(strengths)) profilePayload.strengths = strengths;
     if (Array.isArray(weaknesses)) profilePayload.weaknesses = weaknesses;
     if (study_habits) profilePayload.study_habits = study_habits;
+    if (Array.isArray(student_notes)) profilePayload.student_notes = student_notes;
 
     const { data: existingProfile, error: findErr } = await supabaseAdmin!
       .from("learner_profiles")

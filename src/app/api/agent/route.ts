@@ -10,12 +10,12 @@ import {
   visualDesignerAgent,
   studentReplyReview,
 } from "@/lib/agents";
+import { addStudentNote, type StudentNote } from "@/lib/student-memory";
 import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack, Subject, Topic } from "@/lib/types";
 import { ModelRuntime } from "@/lib/fireworks";
 import { startRun, logStep } from "@/lib/agent-events";
 import {
   getReplyHistoryForIntent,
-  getUploadConfirmation,
   getUploadMaterialContent,
   shouldPersistTopicForTurn,
 } from "@/lib/agent-routing";
@@ -60,13 +60,6 @@ interface ActiveTopic {
   subcategory: string | null;
   subjectId: string;
   subjectName: string;
-}
-
-function summarizeNotes(text: string, maxLength = 160): string {
-  if (!text) return "";
-  const firstSentence = text.split(/[.!?]\s+/)[0].trim();
-  if (firstSentence.length > 0 && firstSentence.length <= maxLength) return firstSentence;
-  return text.slice(0, maxLength).trim() + (text.length > maxLength ? "..." : "");
 }
 
 function buildStudyPackConfirmation(
@@ -423,6 +416,7 @@ interface ProfileRow extends Record<string, unknown> {
   learning_style?: Record<string, unknown>;
   strengths?: string[];
   weaknesses?: string[];
+  student_notes?: StudentNote[];
 }
 
 async function applyMemoryUpdate(
@@ -462,6 +456,7 @@ async function applyMemoryUpdate(
 
     const newStrength = (memoryUpdate.strength_update || "").trim();
     const newWeakness = (memoryUpdate.weakness_update || "").trim();
+    const studentNotes = addStudentNote(existingProfile?.student_notes || [], memoryUpdate.student_note || "");
 
     // Parse explicit language confidence updates like "English: Low" or "Filipino: High".
     const langUpdateMatch = (memoryUpdate.language_confidence_update || "").match(/([^:]+):\s*(Low|Medium|High|Developing)/i);
@@ -493,6 +488,7 @@ async function applyMemoryUpdate(
           ...(newWeakness && !/no change|none|n\/a/i.test(newWeakness) ? [newWeakness] : []),
         ]),
       ],
+      student_notes: studentNotes,
       updated_at: new Date().toISOString(),
     };
 
@@ -508,6 +504,7 @@ async function applyMemoryUpdate(
         learning_style: profileUpdate.learning_style,
         strengths: profileUpdate.strengths,
         weaknesses: profileUpdate.weaknesses,
+        student_notes: profileUpdate.student_notes,
       });
     }
     logStep(requestId, "memory", "Learner profile updated", "done", { updatedFields: Object.keys(profileUpdate) });
