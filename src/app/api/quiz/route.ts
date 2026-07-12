@@ -24,6 +24,22 @@ export async function POST(req: NextRequest) {
     const attempts = (previousProgress.quiz_attempts as number | undefined || 0) + 1;
     const bestScore = Math.max(previousProgress.best_score as number | undefined || 0, percentage);
 
+    // Calculate new confidence based on quiz score
+    let confidence = typeof previousProgress.confidence === "number" ? previousProgress.confidence : 0;
+    if (percentage === 100) {
+      confidence = Math.min(100, confidence + 30);
+    } else if (percentage >= 80) {
+      confidence = Math.min(100, confidence + 20);
+    } else if (percentage >= 70) {
+      confidence = Math.min(100, confidence + 15);
+    } else if (percentage >= 50) {
+      confidence = Math.min(100, confidence + 5);
+    } else {
+      confidence = Math.max(0, confidence - 10);
+    }
+
+    const status = confidence >= 80 ? "mastered" : confidence >= 40 ? "developing" : "started";
+
     const newProgress = {
       ...previousProgress,
       quiz_attempts: attempts,
@@ -31,6 +47,8 @@ export async function POST(req: NextRequest) {
       best_score: bestScore,
       passed,
       last_answers: answers || [],
+      confidence,
+      status,
       updated_at: new Date().toISOString(),
     };
 

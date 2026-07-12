@@ -70,12 +70,70 @@ interface ActiveTopic {
   subjectName: string;
 }
 
+interface MessageRow {
+  role: string;
+  content: string;
+}
+
 function normalizeTopicKey(value: string | null | undefined) {
   return (value || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function toChatHistory(rows: MessageRow[] | null | undefined): ChatMessage[] {
+  return (rows || [])
+    .reverse()
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+}
+
+function getRelevantStudentNotes(message: string, notes: StudentNote[] = []): StudentNote[] {
+  if (!notes.length) return [];
+
+  const normalizedMessage = message.toLowerCase();
+  const keywords = normalizedMessage
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 4);
+
+  return notes
+    .map((note) => {
+      const text = note.text.toLowerCase();
+      let score = 0;
+
+      if (/\b(i am|i'm|im)\s+\d{1,2}\b|\b(age|years old|grade|score|goal|want to learn|prefer|struggle|bad day|good day)\b/i.test(text)) {
+        score += 2;
+      }
+
+      for (const keyword of keywords) {
+        if (text.includes(keyword)) score += 2;
+      }
+
+      if (/\b(age|years old)\b/i.test(text) && /\b(age|old|year)\b/i.test(normalizedMessage)) score += 3;
+      if (/\bscore|quiz|test\b/i.test(text) && /\bscore|quiz|test\b/i.test(normalizedMessage)) score += 3;
+      if (/\bgoal|want to learn|learn\b/i.test(text) && /\blearn|goal|want\b/i.test(normalizedMessage)) score += 3;
+
+      return { note, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(b.note.created_at).getTime() - new Date(a.note.created_at).getTime();
+    })
+    .slice(0, 4)
+    .map((entry) => entry.note);
+}
+
+function buildProfileContext(profile: ProfileRow | null, message: string) {
+  if (!profile) return null;
+
+  return {
+    ...profile,
+    relevant_memories: getRelevantStudentNotes(message, profile.student_notes || []).map((note) => note.text),
+  };
 }
 
 function canonicalizeClassificationToCurriculum(
@@ -650,10 +708,7 @@ export async function POST(req: NextRequest) {
 
     if (historyErr) console.error("History load error:", historyErr);
 
-    const history: ChatMessage[] = (historyRows || [])
-      .reverse()
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    const history = toChatHistory((historyRows || []) as MessageRow[]);
 
     logStep(requestId, "profile", "Loaded conversation history", "done", { historyMessages: history.length });
 
@@ -802,8 +857,8 @@ export async function POST(req: NextRequest) {
         message,
         classification.topic,
         curriculum,
-        profileRow || {},
-        getReplyHistoryForIntent(classification.intent, history),
+        buildProfileContext(profileRow, message) || {},
+        providedTopic ? history : getReplyHistoryForIntent(classification.intent, history),
         undefined,
         teachingQuizResult,
         classification,
@@ -950,7 +1005,19 @@ export async function POST(req: NextRequest) {
     const isRetrieval = RETRIEVAL_INTENTS.includes(classification.intent);
     const isVisualRequest = classification.intent === "make_visual";
     const isUploadOnly = Boolean(imageUrl);
-    const replyHistory = getReplyHistoryForIntent(classification.intent, history);
+    let replyHistory = getReplyHistoryForIntent(classification.intent, history);
+
+    if (classification.intent === "teach_topic" && topic?.id) {
+      const { data: topicHistoryRows } = await supabaseAdmin!
+        .from("messages")
+        .select("role, content")
+        .eq("user_id", userId)
+        .eq("topic_id", topic.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      replyHistory = toChatHistory((topicHistoryRows || []) as MessageRow[]);
+      logStep(requestId, "profile", "Loaded current topic history", "done", { historyMessages: replyHistory.length });
+    }
 
     async function loadMaterialsForTopic(topicId: string) {
       const { data } = await supabaseAdmin!
@@ -1204,6 +1271,7 @@ export async function POST(req: NextRequest) {
         studyPack = await materialCreatorAgent(message, classification.topic, curriculum, profileRow || {}, preferredModel);
 
         const autoMaterialInserts = [
+          { topic_id: topic.id, type: "original_notes", title: "Original Notes", content: { text: message } },
           { topic_id: topic.id, type: "clean_notes", title: "Clean Notes", content: { text: studyPack.clean_notes } },
           { topic_id: topic.id, type: "reviewer", title: "Reviewer", content: { text: studyPack.reviewer } },
           { topic_id: topic.id, type: "flashcards", title: "Flashcards", content: { flashcards: studyPack.flashcards } },
@@ -1242,7 +1310,7 @@ export async function POST(req: NextRequest) {
           })
           .eq("id", topic.id);
 
-        materials_created.push("clean_notes", "reviewer", "flashcards", "quiz", "summary", ...(studyPack.story ? ["story"] : []));
+        materials_created.push("original_notes", "clean_notes", "reviewer", "flashcards", "quiz", "summary", ...(studyPack.story ? ["story"] : []));
         logStep(requestId, "create_materials", "Study pack auto-created from upload", "done");
       }
 
@@ -1259,7 +1327,7 @@ export async function POST(req: NextRequest) {
         : null;
 
       logStep(requestId, "teach", "Teaching Agent: crafting personalized reply", "running");
-      reply = await teachingAgent(message, classification.topic, curriculum, profileRow || {}, replyHistory, studyPack || undefined, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; }, imageUrl);
+      reply = await teachingAgent(message, classification.topic, curriculum, buildProfileContext(profileRow, message) || {}, replyHistory, studyPack || undefined, teachingQuizResult, classification, preferredModel, (runtime) => { modelRuntime = runtime; }, imageUrl);
       logStep(requestId, "teach", "Reply ready", "done", { replyLength: reply.length, runtime: modelRuntime });
       if (!reply || reply.length < 10) {
         reply = `Let's learn about ${classification.topic} step by step.\n\n${curriculum.competency}\n\nCan you tell me what you already know about it?`;

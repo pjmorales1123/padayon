@@ -356,9 +356,33 @@ function TopicPageInner() {
       }
       case "Original Notes": {
         const m = getMaterial("original_notes");
+        if (m?.content?.text) {
+          return (
+            <div className="whitespace-pre-wrap text-slate-800 bg-slate-50 rounded-xl p-4 border border-slate-200">
+              {m.content.text}
+            </div>
+          );
+        }
+
+        const uploads = topic?.materials?.filter((u) => u.type === "image_notes" || u.type === "pdf_notes") || [];
+        if (uploads.length > 0) {
+          return (
+            <div className="space-y-4">
+              {uploads.map((u) => (
+                <div key={u.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="mb-2 font-semibold text-slate-700 text-sm border-b border-slate-200 pb-1.5">{u.title}</h4>
+                  <div className="whitespace-pre-wrap text-slate-800 text-sm font-mono">
+                    {u.content?.text || "No text extracted."}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
         return (
           <div className="whitespace-pre-wrap text-slate-800 bg-slate-50 rounded-xl p-4 border border-slate-200">
-            {m?.content?.text || "No original notes saved."}
+            No original notes saved.
           </div>
         );
       }

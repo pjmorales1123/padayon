@@ -622,7 +622,7 @@ Rules:
 - Only infer learning style, strengths, and weaknesses from this single message or the provided quiz result. Do not hallucinate.
 - If the student asks for a visual, diagram, picture, infographic, chart, or example they can see, set learning_style_update to include "visuals" or "visual examples".
 - If the student corrects an existing profile entry, update it.
-- student_note is only for a short fact, goal, feeling, score, or class event the student explicitly states (for example, "Got a low score in a Math quiz" or "Wants to learn Biology"). Otherwise return an empty string. Never infer it, never save sensitive details, and never save an upload's contents as a personal note.
+- student_note is only for a short fact, goal, feeling, score, age/year level, preference, or class event the student explicitly states (for example, "I am 15 years old", "Got a low score in a Math quiz", "Wants to learn Biology", "Had a hard day", or "Prefers visual examples"). Otherwise return an empty string. Never infer it, never save sensitive details, and never save an upload's contents as a personal note.
 
 Return ONLY valid JSON with these exact string fields:
 - learning_style_update: string (one short phrase, e.g. "visuals, analogies")

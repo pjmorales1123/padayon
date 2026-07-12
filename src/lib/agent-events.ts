@@ -63,9 +63,12 @@ function dbRowToRun(row: {
 }
 
 export async function getRun(requestId: string): Promise<AgentRun | undefined> {
-  // Fast local hit first.
   const local = store.get(requestId);
-  if (local) return local;
+
+  // If we have a local cache and it has finished or failed, return it immediately
+  if (local && local.events.some(e => e.step === "finish" || e.status === "error")) {
+    return local;
+  }
 
   // Fall back to Supabase so polling works across serverless instances.
   try {
@@ -74,8 +77,8 @@ export async function getRun(requestId: string): Promise<AgentRun | undefined> {
       .select("request_id, user_id, message, events, created_at, updated_at")
       .eq("request_id", requestId)
       .single();
-    if (error || !data) return undefined;
-    const run = dbRowToRun(data as unknown as {
+    if (error || !data) return local;
+    const dbRun = dbRowToRun(data as unknown as {
       request_id: string;
       user_id: string;
       message: string;
@@ -83,11 +86,17 @@ export async function getRun(requestId: string): Promise<AgentRun | undefined> {
       created_at: string;
       updated_at: string;
     });
-    store.set(requestId, run);
-    return run;
+
+    // If local instance has more/equal events (e.g. local writes not yet synced in DB), keep local
+    if (local && local.events.length >= dbRun.events.length) {
+      return local;
+    }
+
+    store.set(requestId, dbRun);
+    return dbRun;
   } catch (err) {
     console.warn("Failed to load agent run from Supabase", err);
-    return undefined;
+    return local;
   }
 }
 
