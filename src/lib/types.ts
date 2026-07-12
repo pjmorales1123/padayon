@@ -20,6 +20,7 @@ export interface CurriculumMatch {
   subcategory: string;
   topic: string;
   competency: string;
+  is_competency_aligned: boolean;
   previous_topic: string | null;
   next_topic: string | null;
 }

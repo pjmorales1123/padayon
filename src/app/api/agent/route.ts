@@ -667,6 +667,7 @@ export async function POST(req: NextRequest) {
         intent: classification.intent,
         topic: classification.topic,
         hasUpload,
+        isCompetencyAligned: curriculum.is_competency_aligned,
         history,
       });
 

@@ -259,6 +259,7 @@ export async function curriculumAgent(
         subcategory: row.subcategory || classification.subcategory,
         topic: row.topic || classification.topic,
         competency: row.competency || `Learn about ${classification.topic}`,
+        is_competency_aligned: true,
         previous_topic: row.previous_topic || null,
         next_topic: row.next_topic || null,
       };
@@ -292,7 +293,7 @@ Detected: ${JSON.stringify(classification)}`;
     model
   );
   const parsed = extractJson<CurriculumMatch>(content);
-  if (parsed) return parsed;
+  if (parsed) return { ...parsed, is_competency_aligned: false };
 
   return {
     grade_level: "Grade 9",
@@ -300,6 +301,7 @@ Detected: ${JSON.stringify(classification)}`;
     subcategory: classification.subcategory,
     topic: classification.topic,
     competency: `Learn about ${classification.topic}`,
+    is_competency_aligned: false,
     previous_topic: null,
     next_topic: null,
   };

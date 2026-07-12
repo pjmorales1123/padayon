@@ -54,15 +54,18 @@ export function shouldPersistTopicForTurn({
   intent,
   topic,
   hasUpload,
+  isCompetencyAligned,
   history,
 }: {
   intent: string;
   topic: string;
   hasUpload: boolean;
+  isCompetencyAligned: boolean;
   history: ChatMessage[];
 }) {
   if (hasUpload) return true;
   if (OFFICIAL_TOPIC_INTENTS.has(intent)) return true;
+  if (isCompetencyAligned) return true;
   if (intent !== "teach_topic") return false;
   return hasPriorUserTopicMention(topic, history);
 }

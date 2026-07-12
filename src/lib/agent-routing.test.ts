@@ -30,15 +30,28 @@ describe("agent routing", () => {
     ).toBe("\n\nCharacters can be dynamic or static.");
   });
 
-  it("keeps a first ordinary topic question out of the visible library", () => {
+  it("keeps a first off-curriculum topic question out of the visible library", () => {
     expect(
       shouldPersistTopicForTurn({
         intent: "teach_topic",
         topic: "Types of Conflict",
         hasUpload: false,
+        isCompetencyAligned: false,
         history: [],
       })
     ).toBe(false);
+  });
+
+  it("persists a first topic mention when it matches a curriculum competency", () => {
+    expect(
+      shouldPersistTopicForTurn({
+        intent: "teach_topic",
+        topic: "Types of Conflict in Literature",
+        hasUpload: false,
+        isCompetencyAligned: true,
+        history: [],
+      })
+    ).toBe(true);
   });
 
   it("promotes an ordinary topic when the student returns to it", () => {
@@ -47,6 +60,7 @@ describe("agent routing", () => {
         intent: "teach_topic",
         topic: "Types of Conflict",
         hasUpload: false,
+        isCompetencyAligned: false,
         history: [{ role: "user", content: "What are types of conflict?" }],
       })
     ).toBe(true);
@@ -58,6 +72,7 @@ describe("agent routing", () => {
         intent: "teach_topic",
         topic: "Poetic Meter",
         hasUpload: false,
+        isCompetencyAligned: false,
         history: [{ role: "user", content: "What is meter in poetry?" }],
       })
     ).toBe(true);
@@ -69,6 +84,7 @@ describe("agent routing", () => {
         intent: "teach_topic",
         topic: "Handwritten Notes",
         hasUpload: true,
+        isCompetencyAligned: false,
         history: [],
       })
     ).toBe(true);
