@@ -30,7 +30,7 @@ describe("AgentTrail", () => {
 
     await waitFor(() => {
       expect(screen.queryAllByText("Classifier Agent").length).toBeGreaterThan(0);
-      expect(screen.getByText("Response complete")).toBeTruthy();
+      expect(screen.getByText(/all agents finished/i)).toBeTruthy();
       expect(screen.getByText("100%")).toBeTruthy();
     });
   });
@@ -38,5 +38,57 @@ describe("AgentTrail", () => {
   it("prompts to send a message when no request is active", () => {
     render(<AgentTrail requestId={null} />);
     expect(screen.getByText(/send a message/i)).toBeTruthy();
+  });
+
+  it("keeps one completed agent row and shows its verified model", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        mockRunResponse([
+          { id: "e1", step: "teach", label: "Crafting a student-friendly response", status: "running", ts: 1 },
+          {
+            id: "e2",
+            step: "teach",
+            label: "Reply ready",
+            status: "done",
+            ts: 2,
+            detail: { runtime: { provider: "gemma", model: "gemma-4-31b-it", requested: "gemma-4", fallback: false } },
+          },
+        ]),
+      ),
+    );
+
+    render(<AgentTrail requestId="req-model" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Completed this turn")).toBeTruthy();
+      expect(screen.getByText("Gemma")).toBeTruthy();
+      expect(screen.queryByText("Currently working")).toBeNull();
+    });
+  });
+
+  it("identifies picture processing as the Kimi-powered Vision Agent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        mockRunResponse([
+          {
+            id: "e1",
+            step: "retrieve",
+            label: "Reading text from uploaded picture",
+            status: "running",
+            ts: 1,
+            detail: { runtime: { provider: "fireworks", model: "accounts/fireworks/models/kimi-k2p6", fallback: false } },
+          },
+        ]),
+      ),
+    );
+
+    render(<AgentTrail requestId="req-vision" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Vision Agent")).toBeTruthy();
+      expect(screen.getByText("AMD Fireworks · Kimi")).toBeTruthy();
+    });
   });
 });

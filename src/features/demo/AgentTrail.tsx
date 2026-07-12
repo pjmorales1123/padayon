@@ -61,12 +61,75 @@ const STEP_INFO: Record<string, StepInfo> = {
   profile: { title: "Profile Agent", description: "Loads the learner's history and adapts the plan.", icon: "👤" },
   retrieve: { title: "Retrieval Agent", description: "Looks for saved flashcards, quizzes, or stories.", icon: "🗃️" },
   create_materials: { title: "Material Creator", description: "Builds clean notes, flashcards, quiz, summary & story.", icon: "🛠️" },
-  teach: { title: "Teaching Agent", description: "Writes the personalized reply using Gemma.", icon: "🎓" },
+  teach: { title: "Response Agent", description: "Crafts a personalized reply for the student.", icon: "🎓" },
   save_reply: { title: "Save Reply", description: "Stores the conversation in the user's library.", icon: "💾" },
   memory: { title: "Memory Agent", description: "Updates strengths, weaknesses, and learning style.", icon: "🧠" },
   finish: { title: "Finish", description: "All agents done — reply is ready.", icon: "✅" },
   error: { title: "Error", description: "Something went wrong.", icon: "⚠️" },
 };
+
+function getStepInfo(event: AgentEvent): StepInfo {
+  if (event.step === "retrieve" && /picture|image|ocr|transcrib/i.test(event.label)) {
+    return { title: "Vision Agent", description: "Reads the uploaded picture.", icon: "👁️" };
+  }
+  return STEP_INFO[event.step] || { title: event.step, description: "", icon: STEP_ICONS[event.step] || "⚙️" };
+}
+
+function getModelBadge(event: AgentEvent): string | null {
+  const runtime = event.detail?.runtime as
+    | { provider?: string; model?: string; fallback?: boolean }
+    | undefined;
+  if (!runtime?.provider) return null;
+
+  const base = runtime.provider === "gemma"
+    ? "Gemma"
+    : /kimi/i.test(runtime.model || "")
+      ? "AMD Fireworks · Kimi"
+      : /deepseek/i.test(runtime.model || "")
+        ? "AMD Fireworks · DeepSeek"
+        : "AMD Fireworks";
+
+  return runtime.fallback ? `Fallback → ${base}` : base;
+}
+
+function mergeStageEvents(events: AgentEvent[]): AgentEvent[] {
+  const byStep = new Map<string, AgentEvent>();
+  for (const event of events) {
+    byStep.set(event.step, event);
+  }
+  return Array.from(byStep.values()).sort((a, b) => a.ts - b.ts);
+}
+
+function WorkingBubble({ event }: { event?: AgentEvent }) {
+  const info = event ? getStepInfo(event) : undefined;
+  const model = event ? getModelBadge(event) : null;
+  return (
+    <div className="mb-4 rounded-xl border border-blue-500/40 bg-blue-950/40 p-3">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-blue-300">
+        {event ? "Working on this" : "Waking up"}
+      </p>
+      <div className="flex items-center gap-3">
+        <div className="text-2xl">{info?.icon || "💬"}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-sm font-medium text-slate-100">{info?.title || "Agent team"}</p>
+            {model && <ModelBadge label={model} />}
+          </div>
+          <p className="text-xs text-slate-300">{event?.label || "Getting ready to help with this…"}</p>
+        </div>
+        <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+      </div>
+    </div>
+  );
+}
+
+function ModelBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-200">
+      {label}
+    </span>
+  );
+}
 
 const TOTAL_STEP_UNITS = STEP_ORDER.length - 1;
 
@@ -173,15 +236,19 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
     );
   }
 
-  const finished = events.some((e) => e.step === "finish" && e.status === "done");
-  const currentStep = events.length > 0 ? events[events.length - 1].step : null;
+  const displayEvents = mergeStageEvents(events);
+  const finished = displayEvents.some((e) => e.step === "finish" && e.status === "done");
+  const currentStep = displayEvents.length > 0 ? displayEvents[displayEvents.length - 1].step : null;
   const currentIndex = currentStep ? STEP_ORDER.indexOf(currentStep) : -1;
   const progress = finished
     ? 100
     : Math.min(Math.max(Math.round((currentIndex / TOTAL_STEP_UNITS) * 100), 0), 99);
 
-  const runningEvent = [...events].reverse().find((e) => e.status === "running");
-  const finishEvent = events.find((e) => e.step === "finish" && e.status === "done");
+  const runningEvent = [...displayEvents].reverse().find((e) => e.status === "running");
+  const finishEvent = displayEvents.find((e) => e.step === "finish" && e.status === "done");
+  const completedEvents = displayEvents.filter(
+    (event) => event.status !== "running" && event.step !== "start" && event.step !== "finish",
+  );
   const createdMaterials = (finishEvent?.detail?.materials_created as string[] | undefined) || [];
   const showRetry = failures >= 3;
   const showLoading = isLoading && events.length === 0 && failures < 3;
@@ -231,47 +298,25 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
           </div>
         )}
 
-        {showLoading && <SkeletonStep />}
+        {showLoading && <SkeletonStep count={2} />}
+        {!showLoading && !finished && <WorkingBubble event={runningEvent} />}
 
-        {runningEvent && (
-          <div className="mb-4 rounded-xl border border-blue-500/40 bg-blue-950/40 p-3">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-blue-300">
-              Currently working
-            </p>
-            <div className="flex items-center gap-3">
-              <div className="text-2xl">{STEP_INFO[runningEvent.step]?.icon || STEP_ICONS[runningEvent.step] || "⚙️"}</div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-100 truncate">
-                  {STEP_INFO[runningEvent.step]?.title || runningEvent.step}
-                </p>
-                <p className="text-xs text-slate-300 truncate">{runningEvent.label}</p>
-              </div>
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent shrink-0" />
-            </div>
-            {runningEvent.detail && Object.keys(runningEvent.detail).length > 0 && (
-              <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-950/80 p-2 text-[10px] text-slate-400">
-                {JSON.stringify(runningEvent.detail, null, 2)}
-              </pre>
-            )}
-          </div>
+        {completedEvents.length > 0 && (
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Completed this turn</p>
         )}
-
         <div className="relative space-y-0">
-          {events.length > 0 && <div className="absolute bottom-3 left-[19px] top-3 w-px bg-slate-800" />}
-          {events.map((e) => {
-            const info = STEP_INFO[e.step] || { title: e.step, description: "", icon: STEP_ICONS[e.step] || "⚙️" };
-            const isRunning = e.status === "running";
+          {completedEvents.length > 0 && <div className="absolute bottom-3 left-[19px] top-3 w-px bg-slate-800" />}
+          {completedEvents.map((e) => {
+            const info = getStepInfo(e);
             const isError = e.status === "error";
             const isDone = e.status === "done";
-            const showDetail = isRunning || (isError && e.detail);
+            const model = getModelBadge(e);
             return (
               <div key={e.id} className="relative flex gap-3 pb-4">
                 <div className="relative z-10 flex flex-col items-center">
                   <div
                     className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-lg ${
-                      isRunning
-                        ? "border-blue-400 bg-blue-600"
-                        : isError
+                      isError
                           ? "border-red-500 bg-red-900"
                           : isDone
                             ? "border-green-500/60 bg-slate-800"
@@ -282,11 +327,9 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div
-                    className={`rounded-xl border p-3 ${
-                      isRunning
-                        ? "border-blue-500/30 bg-blue-950/20"
-                        : isError
+                    <div
+                      className={`rounded-xl border p-3 ${
+                      isError
                           ? "border-red-900/50 bg-red-950/30"
                           : isDone
                             ? "border-slate-800 bg-slate-900/60"
@@ -295,20 +338,15 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-200 truncate">{info.title}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="text-sm font-medium text-slate-200">{info.title}</p>
+                          {model && <ModelBadge label={model} />}
+                        </div>
                         <p className="text-xs text-slate-400">{info.description}</p>
                       </div>
                       <StatusBadge status={e.status} />
                     </div>
                     <p className="mt-1.5 text-xs text-slate-300 break-words">{e.label}</p>
-                    {showDetail && e.detail && Object.keys(e.detail).length > 0 && (
-                      <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-950 p-2 text-[10px] text-slate-400">
-                        {JSON.stringify(e.detail, null, 2)}
-                      </pre>
-                    )}
-                    {!showDetail && e.detail && Object.keys(e.detail).length > 0 && (
-                      <p className="mt-1 text-[10px] text-slate-500">{Object.keys(e.detail).join(" · ")}</p>
-                    )}
                   </div>
                 </div>
               </div>
