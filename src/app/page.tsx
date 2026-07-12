@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { buildAppHref } from "@/lib/navigation";
+import { DEMO_PERSONAS } from "@/features/demo/demo-personas";
+import {
+  DEFAULT_LEARNER_PROFILES,
+  mergeLearnerProfiles,
+  readSavedLearnerProfiles,
+  saveLearnerProfiles,
+  type LearnerProfileOption,
+} from "@/lib/learner-profiles";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -15,30 +23,13 @@ interface Topic {
   subjectName: string;
 }
 
-interface Profile {
-  id: string;
-  name: string;
-}
-
-const DEMO_PERSONAS = [
-  { id: "demo-new-student", name: "Maria", tag: "Brand new" },
-  { id: "demo-bisaya-learner", name: "Juan", tag: "Cebuano-first" },
-  { id: "demo-english-advanced", name: "Alex", tag: "Advanced" },
-  { id: "demo-struggling-student", name: "Bea", tag: "Needs support" },
-];
-
-const BASE_PROFILES = [
-  { id: DEMO_USER_ID, name: "Demo Student" },
-  ...DEMO_PERSONAS.map((p) => ({ id: p.id, name: `${p.name} · ${p.tag}` })),
-];
-
 export default function Home() {
   const router = useRouter();
   const [activeUserId, setActiveUserId] = useState(DEMO_USER_ID);
   const [name, setName] = useState("Student");
   const [recentTopics, setRecentTopics] = useState<Topic[]>([]);
   const [subjectCount, setSubjectCount] = useState(0);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<LearnerProfileOption[]>(DEFAULT_LEARNER_PROFILES);
   const [creating, setCreating] = useState(false);
 
   const loadData = () => {
@@ -68,10 +59,10 @@ export default function Home() {
 
   useEffect(() => {
     // Load recently used local profiles from this browser
-    const stored = typeof window !== "undefined" ? localStorage.getItem("padayon_profiles") : null;
-    const localProfiles = stored ? (JSON.parse(stored) as Profile[]) : [];
-    const merged = [...BASE_PROFILES, ...localProfiles.filter((p) => !BASE_PROFILES.some((b) => b.id === p.id))];
-    setProfiles(merged);
+    const timer = window.setTimeout(() => {
+      setProfiles(mergeLearnerProfiles(readSavedLearnerProfiles()));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -95,7 +86,7 @@ export default function Home() {
       }
       const updated = [...profiles, { id: data.userId, name: newName }];
       setProfiles(updated);
-      localStorage.setItem("padayon_profiles", JSON.stringify(updated.slice(BASE_PROFILES.length)));
+      saveLearnerProfiles(updated.filter((profile) => !DEFAULT_LEARNER_PROFILES.some((base) => base.id === profile.id)));
       setActiveUserId(data.userId);
       router.push(buildAppHref("/chat", data.userId));
     } catch {
@@ -156,13 +147,13 @@ export default function Home() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href={`${buildAppHref("/chat", activeUserId)}&new=1&model=gemma-4`}
+                  href={`${buildAppHref("/chat", activeUserId)}&new=1`}
                   className="rounded-xl bg-blue-600 text-white px-6 py-3 font-semibold hover:bg-blue-700 transition"
                 >
                   Start studying →
                 </Link>
                 <Link
-                  href={`${buildAppHref("/demo", activeUserId)}&new=1&model=gemma-4`}
+                  href={`${buildAppHref("/demo", activeUserId)}&new=1`}
                   className="rounded-xl bg-white text-slate-700 border border-slate-300 px-6 py-3 font-semibold hover:bg-slate-50 transition"
                 >
                   Watch PADAYON Think Live
@@ -230,7 +221,7 @@ export default function Home() {
           {DEMO_PERSONAS.map((p) => (
             <Link
               key={p.id}
-              href={`${buildAppHref("/demo", p.id)}&model=gemma-4`}
+              href={buildAppHref("/demo", p.id)}
               className="rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white p-5 hover:shadow-lg transition"
             >
               <div className="flex items-center gap-2 mb-2">
@@ -238,7 +229,7 @@ export default function Home() {
                 <span className="font-bold">{p.name}</span>
               </div>
               <span className="inline-block rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium mb-2">
-                {p.tag}
+                {p.label}
               </span>
               <p className="text-xs text-blue-50">Open {p.name}&apos;s live agent demo.</p>
             </Link>

@@ -7,8 +7,8 @@ import ChatWorkspace from "@/features/chat/ChatWorkspace";
 import { buildAppHref } from "@/lib/navigation";
 import AgentTrail from "./AgentTrail";
 import LearnerSummary from "./LearnerSummary";
-import { DEMO_PERSONAS } from "./demo-personas";
 import { DEFAULT_DEMO_PANEL_WIDTHS, resizeDemoPanels, type DemoPanelDivider, type DemoPanelWidths } from "./panel-layout";
+import { mergeLearnerProfiles, readSavedLearnerProfiles, type LearnerProfileOption } from "@/lib/learner-profiles";
 
 interface DemoWorkspaceProps {
   initialUserId: string;
@@ -27,6 +27,7 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
   const router = useRouter();
   const gridRef = useRef<HTMLDivElement>(null);
   const [userId, setUserId] = useState(initialUserId);
+  const [profiles, setProfiles] = useState<LearnerProfileOption[]>([]);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [resetState, setResetState] = useState<"idle" | "working" | "success" | "error">("idle");
@@ -51,6 +52,13 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
     const timeout = setTimeout(() => setResetState("idle"), 3000);
     return () => clearTimeout(timeout);
   }, [resetState]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setProfiles(mergeLearnerProfiles(readSavedLearnerProfiles()));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!dragState) return;
@@ -145,9 +153,9 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
             className="text-sm rounded-xl border border-slate-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 max-w-[9rem] sm:max-w-none truncate"
             title="Choose a demo persona"
           >
-            {DEMO_PERSONAS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} · {p.label}
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
               </option>
             ))}
           </select>

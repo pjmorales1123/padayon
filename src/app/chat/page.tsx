@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ChatWorkspace from "@/features/chat/ChatWorkspace";
 import { buildAppHref } from "@/lib/navigation";
+import { mergeLearnerProfiles, readSavedLearnerProfiles, type LearnerProfileOption } from "@/lib/learner-profiles";
 
 const DEMO_USER_ID = "demo-user-id";
 
@@ -17,13 +18,9 @@ interface Topic {
 }
 
 function ChatPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const userId = searchParams?.get("userId") || DEMO_USER_ID;
-  const modelParam = searchParams?.get("model") as "fallback" | "gemma-4" | null;
-  const validModels = ["fallback", "gemma-4"];
-  const initialModel = validModels.includes(modelParam || "")
-    ? (modelParam as "fallback" | "gemma-4")
-    : "gemma-4";
   const initialPrompt = searchParams?.get("prompt") || undefined;
   const autoSend = searchParams?.get("autoSend") === "1";
   const initialRequestId = searchParams?.get("requestId") || undefined;
@@ -32,6 +29,20 @@ function ChatPageInner() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [loadingTopics, setLoadingTopics] = useState(true);
+  const [profiles, setProfiles] = useState<LearnerProfileOption[]>([]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setProfiles(mergeLearnerProfiles(readSavedLearnerProfiles()));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const handleProfileChange = (selectedUserId: string) => {
+    if (selectedUserId === userId) return;
+    setSelectedTopicId(null);
+    router.replace(buildAppHref("/chat", selectedUserId), { scroll: false });
+  };
 
   useEffect(() => {
     fetch(`/api/library?userId=${encodeURIComponent(userId)}`)
@@ -47,8 +58,8 @@ function ChatPageInner() {
             new Date(a.last_studied_at).getTime()
         );
         setTopics(allTopics);
-        if (allTopics.length > 0 && !selectedTopicId) {
-          setSelectedTopicId(allTopics[0].id);
+        if (allTopics.length > 0) {
+          setSelectedTopicId((selectedTopicId) => selectedTopicId || allTopics[0].id);
         }
       })
       .catch(() => setTopics([]))
@@ -56,7 +67,23 @@ function ChatPageInner() {
   }, [userId]);
 
   return (
-    <main className="h-[calc(100vh-4rem)] max-w-6xl mx-auto px-4 py-4 flex gap-4">
+    <main className="h-[calc(100vh-4rem)] max-w-6xl mx-auto px-4 py-4 flex flex-col gap-3">
+      <div className="flex justify-end">
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          Student:
+          <select
+            aria-label="Student profile"
+            value={userId}
+            onChange={(event) => handleProfileChange(event.target.value)}
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>{profile.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="min-h-0 flex flex-1 gap-4">
       <aside className="hidden sm:flex flex-col w-64 shrink-0 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-200">
           <h2 className="font-bold text-slate-900">Chat history</h2>
@@ -112,12 +139,13 @@ function ChatPageInner() {
         <ChatWorkspace
           userId={userId}
           topicId={selectedTopicId || undefined}
-          initialModel={initialModel}
+          key={`${userId}-${selectedTopicId || "all"}`}
           initialPrompt={initialPrompt}
           autoSend={autoSend}
           initialRequestId={initialRequestId}
           startFresh={startFresh}
         />
+      </div>
       </div>
     </main>
   );
