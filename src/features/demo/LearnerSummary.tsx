@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface LearnerSummaryProps {
   userId: string;
@@ -47,12 +47,25 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [library, setLibrary] = useState<LibraryData | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const hasDataRef = useRef(false);
+
+  // Auto-refresh the summary every 8 seconds so it stays in sync with the agent
+  // without the user needing to manually refresh the page.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRetryCount((c) => c + 1);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
+      // Only show the skeleton on the first load; background polls keep old data visible.
+      if (!hasDataRef.current) {
+        setLoading(true);
+      }
       setError(null);
       try {
         const [profileRes, libraryRes] = await Promise.all([
@@ -75,6 +88,7 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
         if (!cancelled) {
           setProfile(profileData);
           setLibrary(libraryData);
+          hasDataRef.current = true;
         }
       } catch (err) {
         if (!cancelled) {

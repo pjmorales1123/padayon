@@ -4,6 +4,9 @@ import { callFireworksVision } from "@/lib/fireworks";
 import { supabaseAdmin } from "@/lib/supabase";
 import { startRun, logStep } from "@/lib/agent-events";
 
+// Vision OCR can take a while for dense notes; give it the same headroom as the agent route.
+export const maxDuration = 60;
+
 const visionRuntime = {
   requested: "auto",
   provider: "fireworks",

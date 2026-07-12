@@ -305,7 +305,18 @@ export default function ChatWorkspace({
     formData.append("image", dataUrl);
     if (requestId) formData.append("requestId", requestId);
     const uploadRes = await fetch("/api/agent/upload", { method: "POST", body: formData });
-    const uploadData = await uploadRes.json();
+    let uploadData: { extractedText?: string; error?: string } = {};
+    const contentType = uploadRes.headers.get("content-type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        uploadData = await uploadRes.json();
+      } else {
+        const text = await uploadRes.text();
+        uploadData = { error: text || `Server returned ${uploadRes.status}` };
+      }
+    } catch {
+      uploadData = { error: `Server returned ${uploadRes.status}` };
+    }
     if (!uploadRes.ok || !uploadData.extractedText) {
       throw new Error(uploadData.error || "Could not read image");
     }
