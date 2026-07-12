@@ -5,10 +5,15 @@ import {
   getReplyHistoryForIntent,
   getUploadConfirmation,
   getUploadMaterialContent,
+  isLastLessonQuestion,
   shouldPersistTopicForTurn,
 } from "./agent-routing";
 
 describe("agent routing", () => {
+  it("recognizes previous-lesson wording", () => {
+    expect(isLastLessonQuestion("What was the previous lesson?")).toBe(true);
+  });
+
   it("answers a last-lesson question with the learner's actual latest topic", () => {
     expect(
       getLastLessonReply({

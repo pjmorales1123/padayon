@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Maximize2, X } from "lucide-react";
 
 interface HtmlVisualProps {
   topic: string;
@@ -11,6 +12,7 @@ interface HtmlVisualProps {
 export default function HtmlVisual({ topic, title, html }: HtmlVisualProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(360);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -47,9 +49,20 @@ export default function HtmlVisual({ topic, title, html }: HtmlVisualProps) {
 
   return (
     <div className="w-full rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-      <div className="px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-slate-100 flex items-center justify-between gap-3">
         <p className="text-xs font-semibold text-indigo-900 truncate">{title}</p>
-        <span className="text-[10px] text-indigo-600/70 uppercase tracking-wide">Visual · {topic}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] text-indigo-600/70 uppercase tracking-wide">Visual · {topic}</span>
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-label={`Open ${topic} visual full screen`}
+            title="Open full screen"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-indigo-700 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       <div className="w-full bg-white">
         <iframe
@@ -59,9 +72,28 @@ export default function HtmlVisual({ topic, title, html }: HtmlVisualProps) {
           className="w-full border-0"
           style={{ height, minHeight: 360 }}
           sandbox="allow-scripts allow-same-origin"
-          scrolling="no"
+          scrolling="yes"
         />
       </div>
+      {expanded && (
+        <div role="dialog" aria-modal="true" aria-label={`${topic} visual`} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="flex h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <p className="font-semibold text-slate-900 truncate">{title}</p>
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-label="Close full screen visual"
+                title="Close"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <iframe title={`${title} full screen`} srcDoc={html} className="min-h-0 flex-1 w-full border-0" sandbox="allow-scripts allow-same-origin" scrolling="yes" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -692,6 +692,24 @@ function buildFastHtmlVisual(
       <path d="M225 90 L260 90" stroke="#4caf50" stroke-width="2" marker-end="url(#arrow)"/>
       <text x="270" y="95" font-size="10" fill="#1b5e20">O₂ + glucose</text>
       <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#666"/></marker></defs>
+    </svg>` : topic.toLowerCase().includes("conflict") ? `
+    <svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto" role="img" aria-label="Four types of literary conflict">
+      <rect x="8" y="8" width="164" height="98" rx="12" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+      <circle cx="57" cy="43" r="12" fill="#fbbf24"/><path d="M57 55v27m-16-14h32m-25 14-9 13m27-13 9 13" stroke="#7c2d12" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="124" cy="43" r="12" fill="#fbbf24"/><path d="M124 55v27m-16-14h32m-25 14-9 13m27-13 9 13" stroke="#7c2d12" stroke-width="4" stroke-linecap="round"/>
+      <path d="M84 49l14 14-14 14" fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+      <text x="90" y="97" text-anchor="middle" font-size="13" fill="#991b1b" font-weight="700">Person vs Person</text>
+      <rect x="188" y="8" width="164" height="98" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+      <circle cx="270" cy="48" r="15" fill="#fbbf24"/><path d="M270 63v24m-16-12h32m-24 12-8 10m24-10 8 10" stroke="#78350f" stroke-width="4" stroke-linecap="round"/>
+      <path d="M245 31q25-19 50 0" fill="none" stroke="#f59e0b" stroke-width="3"/><text x="270" y="97" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">Person vs Self</text>
+      <rect x="8" y="124" width="164" height="98" rx="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+      <circle cx="49" cy="158" r="10" fill="#93c5fd"/><circle cx="81" cy="158" r="10" fill="#93c5fd"/><circle cx="113" cy="158" r="10" fill="#93c5fd"/>
+      <path d="M49 170v24m32-24v24m32-24v24M137 149v42m-12-21h24" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round"/>
+      <text x="90" y="213" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="700">Person vs Society</text>
+      <rect x="188" y="124" width="164" height="98" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+      <path d="M207 167q13-20 26 0q13-20 26 0q13-20 26 0q13-20 26 0" fill="none" stroke="#0284c7" stroke-width="5"/>
+      <path d="M270 147v38m-13-18h26m-19 18-7 12m19-12 7 12" stroke="#166534" stroke-width="4" stroke-linecap="round"/>
+      <text x="270" y="213" text-anchor="middle" font-size="13" fill="#166534" font-weight="700">Person vs Nature</text>
     </svg>` : `
     <svg viewBox="0 0 320 120" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
       <rect x="20" y="20" width="280" height="80" rx="16" fill="#e3f2fd" stroke="#2196f3" stroke-width="2"/>

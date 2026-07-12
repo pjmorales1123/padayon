@@ -92,7 +92,7 @@ export function getUploadMaterialContent(attachmentType: string | undefined, ima
 }
 
 export function isLastLessonQuestion(message: string) {
-  return /last lesson|last topic|what did we (learn|discuss)|where did we (leave off|stop)|last time/i.test(message);
+  return /last lesson|previous lesson|previous topic|last topic|what did we (learn|discuss)|where did we (leave off|stop)|last time/i.test(message);
 }
 
 export function getLastLessonReply(lastLesson: LastLesson) {
