@@ -1,5 +1,6 @@
 const DEFAULT_MODEL = process.env.FIREWORKS_MODEL || "accounts/fireworks/models/deepseek-v4-flash";
-const FALLBACK_MODEL = process.env.FIREWORKS_FALLBACK_MODEL || "accounts/fireworks/models/kimi-k2p5";
+const FALLBACK_MODEL = process.env.FIREWORKS_FALLBACK_MODEL || "accounts/fireworks/models/deepseek-v4-flash";
+const FALLBACK_SERVERLESS_MODEL = "accounts/fireworks/models/deepseek-v4-flash";
 const VISION_MODEL = process.env.FIREWORKS_VISION_MODEL || "accounts/fireworks/models/kimi-k2p6";
 const REQUEST_TIMEOUT_MS = 60000;
 
@@ -12,7 +13,7 @@ const GEMMA_3_MODEL_NAME = process.env.GEMMA_3_MODEL_NAME || "accounts/fireworks
 const GEMMA_4_MODEL_NAME = process.env.GEMMA_4_MODEL_NAME || "accounts/fireworks/models/gemma-4-31b-it";
 const GEMMA_API_KEY = process.env.GEMMA_API_KEY || process.env.FIREWORKS_API_KEY || "";
 
-export type ModelPreference = "auto" | "gemma-3" | "gemma-4";
+export type ModelPreference = "auto" | "fallback" | "gemma-3" | "gemma-4";
 
 export interface ModelRuntime {
   requested: ModelPreference;
@@ -104,6 +105,29 @@ export async function callFireworks(
   preferredModel: ModelPreference = "auto",
   reportRuntime?: ModelRuntimeReporter
 ) {
+  // Fallback / auto always uses the fast Kimi serverless model.
+  if (preferredModel === "fallback" || preferredModel === "auto") {
+    try {
+      const result = await callModel(FALLBACK_SERVERLESS_MODEL, messages, jsonMode, maxTokens);
+      if (result && reportRuntime) {
+        reportRuntime({ requested: preferredModel, provider: "fireworks", model: FALLBACK_SERVERLESS_MODEL, fallback: false });
+      }
+      return result;
+    } catch (err) {
+      console.warn(`Fallback model ${FALLBACK_SERVERLESS_MODEL} failed, trying default ${DEFAULT_MODEL}`, err);
+      try {
+        const result = await callModel(DEFAULT_MODEL, messages, jsonMode, maxTokens);
+        if (result && reportRuntime) {
+          reportRuntime({ requested: preferredModel, provider: "fireworks", model: DEFAULT_MODEL, fallback: true });
+        }
+        return result;
+      } catch (fallbackErr) {
+        console.error(`Default model ${DEFAULT_MODEL} also failed`, fallbackErr);
+        return '';
+      }
+    }
+  }
+
   let gemmaAttempted = false;
 
   if (preferredModel === "gemma-3" || preferredModel === "gemma-4") {
@@ -117,27 +141,26 @@ export async function callFireworks(
       return result;
     } catch (err) {
       gemmaAttempted = true;
-      console.warn(`Gemma ${preferredModel} failed, falling back to serverless`, err);
-      // Fall through to default/fallback serverless models
+      console.warn(`Gemma ${preferredModel} failed, falling back to ${FALLBACK_SERVERLESS_MODEL}`, err);
     }
   }
 
   try {
-    const result = await callModel(DEFAULT_MODEL, messages, jsonMode, maxTokens);
+    const result = await callModel(FALLBACK_SERVERLESS_MODEL, messages, jsonMode, maxTokens);
     if (result && reportRuntime) {
-      reportRuntime({ requested: preferredModel, provider: "fireworks", model: DEFAULT_MODEL, fallback: gemmaAttempted });
+      reportRuntime({ requested: preferredModel, provider: "fireworks", model: FALLBACK_SERVERLESS_MODEL, fallback: gemmaAttempted });
     }
     return result;
   } catch (err) {
-    console.warn(`Primary model ${DEFAULT_MODEL} failed, trying fallback ${FALLBACK_MODEL}`, err);
+    console.warn(`Fallback model ${FALLBACK_SERVERLESS_MODEL} failed, trying default ${DEFAULT_MODEL}`, err);
     try {
-      const result = await callModel(FALLBACK_MODEL, messages, jsonMode, maxTokens);
+      const result = await callModel(DEFAULT_MODEL, messages, jsonMode, maxTokens);
       if (result && reportRuntime) {
-        reportRuntime({ requested: preferredModel, provider: "fireworks", model: FALLBACK_MODEL, fallback: true });
+        reportRuntime({ requested: preferredModel, provider: "fireworks", model: DEFAULT_MODEL, fallback: true });
       }
       return result;
     } catch (fallbackErr) {
-      console.error(`Fallback model ${FALLBACK_MODEL} also failed`, fallbackErr);
+      console.error(`Default model ${DEFAULT_MODEL} also failed`, fallbackErr);
       return '';
     }
   }
@@ -150,6 +173,126 @@ export async function callFireworksWithModel(model: string, messages: ChatMessag
     console.error(`Model ${model} failed`, err);
     return '';
   }
+}
+
+const VISION_META_PATTERNS = [
+  /^The user wants/i,
+  /^I need to/i,
+  /^I should/i,
+  /^Let me /i,
+  /^Wait[,.]?/i,
+  /^Actually[,.]?/i,
+  /^Looking at /i,
+  /^Top (section|left|right)/i,
+  /^Bottom /i,
+  /^Left side:/i,
+  /^Right side:/i,
+  /^Left:/i,
+  /^Right:/i,
+  /^Then:/i,
+  /^Then sections?/i,
+  /^Hmm[,.]?/i,
+  /^Line \d+:/i,
+  /^I think /i,
+  /^I will /i,
+  /^I can /i,
+  /^But /i,
+  /^However,/i,
+  /^So /i,
+  /^Now,/i,
+  /^First,/i,
+  /^Next,/i,
+  /^Finally,/i,
+  /^In plain text/i,
+  /^For the two-column/i,
+  /^Since I need/i,
+  /^Without knowing/i,
+  /^I can't easily/i,
+  /^Since the user/i,
+  /^The raw OCR/i,
+  /^We need to /i,
+  /^From the raw OCR/i,
+  /^The most complete/i,
+  /^The actual text/i,
+  /^Let me verify/i,
+  /^Let me check/i,
+  /^Let me re-examine/i,
+  /^Let me also/i,
+  /^Let me look/i,
+  /^Let me assume/i,
+  /^Let me just/i,
+  /^One more check/i,
+  /^But actually/i,
+  /^Then (two columns|there|the sections|the descriptions)/i,
+  /^Under (INTERNAL|EXTERNAL):/i,
+];
+
+function looksLikeVisionMeta(text: string): boolean {
+  return VISION_META_PATTERNS.some((pattern) => pattern.test(text.trim()));
+}
+
+function stripSurroundingQuotes(line: string): string {
+  if (line.length > 2 && line.startsWith('"') && line.endsWith('"') && (line.match(/"/g) || []).length === 2) {
+    return line.slice(1, -1);
+  }
+  return line;
+}
+
+function dedupeConsecutiveLines(lines: string[]): string[] {
+  const deduped: string[] = [];
+  for (const line of lines) {
+    if (line === deduped[deduped.length - 1]) continue;
+    deduped.push(line);
+  }
+  return deduped;
+}
+
+function extractNumberedList(rawText: string): string[] | null {
+  const lines: string[] = [];
+  for (const rawLine of rawText.split(/\r?\n/)) {
+    const match = /^\s*\d+[\.)]\s+(.*)$/.exec(rawLine);
+    if (!match) continue;
+    let line = stripSurroundingQuotes(match[1].trim());
+    if (line) lines.push(line);
+  }
+  return lines.length >= 3 ? lines : null;
+}
+
+function isVisionMetaLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  if (looksLikeVisionMeta(trimmed)) return true;
+  // Drop model-added positional labels like Left: "..." Right: "..."
+  if (/^(Left|Right):\s*["']?/i.test(trimmed)) return true;
+  // Drop quoted observations that include positional commentary
+  if (/^["'].*["']\s*\(.*(left|right|with|maybe|heading|title|centered|above|below)/i.test(trimmed)) {
+    return true;
+  }
+  return false;
+}
+
+function cleanVisionOutput(rawText: string): string {
+  // Prefer a numbered-list transcription when the model produces one.
+  const numbered = extractNumberedList(rawText);
+  if (numbered) {
+    return dedupeConsecutiveLines(numbered).join("\n").trim();
+  }
+
+  // Fall back to stripping known meta commentary.
+  const cleaned: string[] = [];
+  for (const rawLine of rawText.split(/\r?\n/)) {
+    if (isVisionMetaLine(rawLine)) continue;
+
+    let line = rawLine.trim();
+    if (!line) continue;
+
+    line = stripSurroundingQuotes(line);
+    line = line.replace(/^Line \d+:\s*["']?/i, "");
+
+    cleaned.push(line);
+  }
+
+  return dedupeConsecutiveLines(cleaned).join("\n").trim();
 }
 
 export async function callFireworksVision(
@@ -202,7 +345,8 @@ export async function callFireworksVision(
     }
 
     const data = await res.json();
-    return data.choices?.[0]?.message?.content || "";
+    const raw = data.choices?.[0]?.message?.content || "";
+    return cleanVisionOutput(raw);
   } catch (err) {
     console.error("Fireworks vision call failed", err);
     return '';
