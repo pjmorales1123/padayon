@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatRetrievedMaterial,
   getReplyHistoryForIntent,
   getUploadConfirmation,
   getUploadMaterialContent,
@@ -7,6 +8,12 @@ import {
 } from "./agent-routing";
 
 describe("agent routing", () => {
+  it("returns saved clean notes in a retrieval reply", () => {
+    expect(
+      formatRetrievedMaterial("clean_notes", { text: "Characters can be dynamic or static." })
+    ).toBe("\n\nCharacters can be dynamic or static.");
+  });
+
   it("keeps a first ordinary topic question out of the visible library", () => {
     expect(
       shouldPersistTopicForTurn({

@@ -15,6 +15,7 @@ import { ChatMessage, MemoryUpdate, InteractivePayload, StudyPack, Subject, Topi
 import { ModelRuntime } from "@/lib/fireworks";
 import { startRun, logStep } from "@/lib/agent-events";
 import {
+  formatRetrievedMaterial,
   getReplyHistoryForIntent,
   getUploadMaterialContent,
   shouldPersistTopicForTurn,
@@ -377,37 +378,6 @@ function buildRetrievalInteractive(
   }
 
   return null;
-}
-
-function formatRetrievedMaterial(type: string, content: MaterialContent): string {
-  if (type === "flashcards" && content?.flashcards) {
-    const cards = content.flashcards as Array<{ front: string; back: string }>;
-    return "\n\n" + cards.map((c, i) => `${i + 1}. ${c.front}\n   → ${c.back}`).join("\n\n");
-  }
-  if (type === "quiz" && content?.quiz) {
-    const quiz = content.quiz as Array<{ question: string; choices: string[]; answer: string }>;
-    return (
-      "\n\n" +
-      quiz
-        .map(
-          (q, i) =>
-            `${i + 1}. ${q.question}\n   ${q.choices
-              .map((c, j) => `${String.fromCharCode(65 + j)}. ${c}`)
-              .join("\n   ")}\n   Answer: ${q.answer}`
-        )
-        .join("\n\n")
-    );
-  }
-  if (type === "reviewer") {
-    return "\n\n" + (content?.reviewer || "");
-  }
-  if (type === "summary") {
-    return "\n\n" + (content?.text || "");
-  }
-  if (type === "story") {
-    return "\n\n" + (content?.text || "");
-  }
-  return "";
 }
 
 interface ProfileRow extends Record<string, unknown> {

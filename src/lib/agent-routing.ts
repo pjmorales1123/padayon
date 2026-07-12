@@ -1,5 +1,12 @@
 import { ChatMessage } from "./types";
 
+export interface RetrievedMaterialContent {
+  text?: string;
+  reviewer?: string;
+  flashcards?: Array<{ front: string; back: string }>;
+  quiz?: Array<{ question: string; choices: string[]; answer: string }>;
+}
+
 const OFFICIAL_TOPIC_INTENTS = new Set([
   "create_study_pack",
   "make_flashcards",
@@ -76,6 +83,20 @@ export function getUploadMaterialContent(attachmentType: string | undefined, ima
   return attachmentType === "pdf"
     ? { preview_image_url: imageUrl, text }
     : { image_url: imageUrl, text };
+}
+
+export function formatRetrievedMaterial(type: string, content: RetrievedMaterialContent): string {
+  if (type === "flashcards" && content.flashcards) {
+    return "\n\n" + content.flashcards.map((card, index) => `${index + 1}. ${card.front}\n   → ${card.back}`).join("\n\n");
+  }
+  if (type === "quiz" && content.quiz) {
+    return "\n\n" + content.quiz.map((question, index) => (
+      `${index + 1}. ${question.question}\n   ${question.choices.map((choice, choiceIndex) => `${String.fromCharCode(65 + choiceIndex)}. ${choice}`).join("\n   ")}\n   Answer: ${question.answer}`
+    )).join("\n\n");
+  }
+  if (type === "reviewer") return "\n\n" + (content.reviewer || "");
+  if (type === "clean_notes" || type === "summary" || type === "story") return "\n\n" + (content.text || "");
+  return "";
 }
 
 export function getReplyHistoryForIntent(intent: string, history: ChatMessage[]) {
