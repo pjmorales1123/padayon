@@ -10,7 +10,7 @@
 3. Open the **Live Demo** or click any persona card.
 4. Use the bottom navigation bar to move between Home, Live Demo, Chat, Library, and Profile — the selected learner stays attached to every link.
 
-> Gemma 4 uses the Fireworks on-demand deployment `accounts/princejirehmorales-2/deployments/ymlz8joa`. Scale it up 4–5 minutes before the judged demo moment, use **Auto** for setup/practice, and switch to **Gemma 4** only for the judged run. If Gemma is still warming up or unreachable, the badge truthfully switches to **Fallback · Fireworks** and the demo continues.
+> Gemma 4 uses the Fireworks on-demand deployment `accounts/princejirehmorales-2/deployments/ymlz8joa`. Scale it up 4–5 minutes before the judged demo moment, use **Fallback · Kimi k2.6** for setup/practice, and switch to **Gemma 4** only for the judged run. If Gemma is still warming up or unreachable, the badge truthfully switches to **Fallback · Fireworks** and the demo continues.
 
 ---
 
@@ -101,20 +101,25 @@
 
 ### 4. Actual-runtime badge (truthful model labeling)
 
-After each assistant reply, look at the model badge above the message list:
+The model selector has only two options:
 
-- **Auto · primary** — the default Fireworks serverless model served the request.
-- **Gemma 4** — the Gemma endpoint responded and no fallback happened.
-- **Fallback · Fireworks** — Gemma was requested but unreachable, so PADAYON fell back to the reliable serverless model.
+- **Gemma 4 · AMD/Fireworks** — the on-demand AMD/Gemma endpoint.
+- **Fallback · Kimi k2.6** — the fast Fireworks serverless fallback.
 
-**Talking point:** *"The badge tells the truth. If Gemma isn't available, we don't fake it — we fall back and show exactly what ran."*
+After each assistant reply, the runtime badge above the message list shows the model that actually served the request:
+
+- **Gemma 4 · AMD/Fireworks** — Gemma responded and no fallback happened.
+- **Kimi k2.6 · Fireworks** — Fallback was selected and Kimi served the request.
+- **Fallback · Fireworks** — Gemma was selected but unreachable, so PADAYON fell back to Kimi.
+
+**Talking point:** *"The badge tells the truth. We don't fake a Gemma run — if Gemma isn't available, we fall back and show exactly what ran."*
 
 #### Demo switch point
 
-1. With the model selector on **Auto**, send a prompt and note **Auto · primary**.
-2. Switch the selector to **Gemma 4** and send the same prompt.
-3. If Gemma is configured, the badge reads **Gemma 4**.
-4. If Gemma is not configured, the badge reads **Fallback · Fireworks** and the response still works.
+1. With the model selector on **Fallback · Kimi k2.6**, send a prompt and note **Kimi k2.6 · Fireworks**.
+2. Switch the selector to **Gemma 4 · AMD/Fireworks** and send the same prompt.
+3. If Gemma is warm, the badge reads **Gemma 4 · AMD/Fireworks**.
+4. If Gemma is still cold, the badge reads **Fallback · Fireworks** and the response still works.
 
 ---
 
@@ -133,7 +138,7 @@ After each assistant reply, look at the model badge above the message list:
 
 ## Backup prompts if the model is slow
 
-If Gemma 4 takes too long, switch the model selector to **Auto** and use these reliable prompts:
+If Gemma 4 takes too long, switch the model selector to **Fallback · Kimi k2.6** and use these reliable prompts:
 
 - *"Explain photosynthesis like I'm 10"*
 - *"Make flashcards for photosynthesis"*
@@ -148,7 +153,7 @@ These have fallback seeded materials, so the demo never breaks.
 
 Gemma 4 on-demand on NVIDIA H200 burns credits while deployed and active. For the hackathon demo:
 
-- Use **Auto** model during setup and practice.
+- Use **Fallback · Kimi k2.6** during setup and practice.
 - Scale up `accounts/princejirehmorales-2/deployments/ymlz8joa` 4–5 minutes before the judged run:
   ```powershell
   node scripts/gemma4-scale.js up

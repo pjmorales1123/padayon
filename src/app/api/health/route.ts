@@ -24,7 +24,6 @@ export async function GET(_req: NextRequest) {
       ready: true,
       message: "Database is ready.",
       defaultModel: process.env.FIREWORKS_MODEL || "accounts/fireworks/models/deepseek-v4-flash",
-      gemma3Configured: !!(process.env.GEMMA_3_DEPLOYMENT || process.env.GEMMA_3_ENDPOINT),
       gemma4Configured: !!(process.env.GEMMA_4_DEPLOYMENT || process.env.GEMMA_4_ENDPOINT),
     });
   } catch (err) {

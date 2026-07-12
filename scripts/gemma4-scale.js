@@ -26,8 +26,13 @@ if (!apiKey || !deployment) {
 }
 
 const action = process.argv[2];
-const maxReplicas = action === "up" ? 1 : action === "down" ? 0 : action === "status" ? -1 : null;
-if (maxReplicas === null && action !== "status") {
+const settings =
+  action === "up"
+    ? { minReplicaCount: 1, maxReplicaCount: 1 }
+    : action === "down"
+      ? { minReplicaCount: 0, maxReplicaCount: 0 }
+      : null;
+if (!settings && action !== "status") {
   console.error("Usage: node scripts/gemma4-scale.js up|down|status");
   process.exit(1);
 }
@@ -36,10 +41,10 @@ async function scale() {
   const res = await fetch(`https://api.fireworks.ai/v1/${deployment}`, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ minReplicaCount: 0, maxReplicaCount: maxReplicas }),
+    body: JSON.stringify(settings),
   });
   const data = await res.json();
-  console.log(JSON.stringify({ state: data.state, desired: data.desiredReplicaCount, max: data.maxReplicaCount, replicas: data.replicaCount }, null, 2));
+  console.log(JSON.stringify({ state: data.state, desired: data.desiredReplicaCount, min: data.minReplicaCount, max: data.maxReplicaCount, replicas: data.replicaCount }, null, 2));
 }
 
 async function status() {
@@ -47,7 +52,7 @@ async function status() {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
   const data = await res.json();
-  console.log(JSON.stringify({ state: data.state, desired: data.desiredReplicaCount, max: data.maxReplicaCount, replicas: data.replicaCount, accelerator: data.acceleratorType, acceleratorCount: data.acceleratorCount }, null, 2));
+  console.log(JSON.stringify({ state: data.state, desired: data.desiredReplicaCount, min: data.minReplicaCount, max: data.maxReplicaCount, replicas: data.replicaCount, accelerator: data.acceleratorType, acceleratorCount: data.acceleratorCount }, null, 2));
 }
 
 (async () => {

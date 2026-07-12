@@ -31,8 +31,8 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 
 - **Primary Model:** **Gemma 4 31B Instruct** via Fireworks AI. Fireworks is an AMD partner and runs Gemma inference on AMD-powered infrastructure, satisfying the hackathon's AMD compute requirement.
 - **AI Runtime:** Fireworks AI API — the production runtime for all seven agents (classifier, curriculum, organizer, material creator, teacher, assessment, memory).
-- **Fallback Models:** `deepseek-v4-flash` / `kimi-k2p5` — fast, serverless Fireworks models that take over automatically if the Gemma endpoint is scaled down or unavailable, keeping the demo stable.
-- **Model Toggle:** The chat UI defaults to **Gemma 4** and also lets you switch to **Gemma 3** or **Auto** (serverless fallback). The runtime badge always shows the actual model provider (`Gemma 4 · AMD/Fireworks`, `Auto · Fireworks`, or `Fallback · Fireworks`).
+- **Fallback Model:** `deepseek-v4-flash` — fast, serverless Fireworks chat model that takes over automatically if the Gemma endpoint is scaled down or unavailable, keeping the demo stable.
+- **Model Toggle:** The chat UI defaults to **Gemma 4** and also lets you switch to **Fallback · DeepSeek V4 Flash**. The runtime badge always shows the actual model provider (`Gemma 4 · AMD/Fireworks`, `DeepSeek V4 Flash · Fireworks`, or `Fallback · Fireworks`).
 - **AMD Developer Cloud:** The architecture is also designed to accept a self-hosted Gemma endpoint on an AMD GPU pod via `GEMMA_4_ENDPOINT` when available.
 
 ## Agent Architecture
@@ -99,11 +99,9 @@ PADAYON is an AI learning partner that turns messy student input into organized,
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
 | `DATABASE_URL` | Direct Postgres connection string (only needed for `npm run migrate`) |
 | `FIREWORKS_API_KEY` | Fireworks AI API key |
-| `FIREWORKS_MODEL` | Default serverless model ID (default: deepseek-v4-flash) |
-| `FIREWORKS_FALLBACK_MODEL` | Fallback serverless model ID (default: kimi-k2p5) |
-| `GEMMA_3_DEPLOYMENT` | Fireworks on-demand deployment name for Gemma 3 (optional, preferred) |
+| `FIREWORKS_MODEL` | Default serverless model ID (default: kimi-k2p6) |
+| `FIREWORKS_FALLBACK_MODEL` | Fallback serverless model ID (default: kimi-k2p6) |
 | `GEMMA_4_DEPLOYMENT` | Fireworks on-demand deployment name for Gemma 4 (optional) |
-| `GEMMA_3_ENDPOINT` | External OpenAI-compatible endpoint for Gemma 3 (optional) |
 | `GEMMA_4_ENDPOINT` | External OpenAI-compatible endpoint for Gemma 4 (optional) |
 | `GEMMA_API_KEY` | API key for the Gemma endpoint (optional, falls back to FIREWORKS_API_KEY) |
 
@@ -115,9 +113,9 @@ Every primary link carries the selected `userId` query parameter, so switching b
 
 After each assistant reply, the chat header shows the model that actually served the request:
 
-- `Gemma 4` — the Gemma endpoint responded and fallback was not used.
-- `Auto · primary` — the default Fireworks serverless model responded.
-- `Fallback · Fireworks` — Gemma was requested but unreachable, so the request fell back to Fireworks.
+- `Gemma 4 · AMD/Fireworks` — the Gemma endpoint responded and fallback was not used.
+- `DeepSeek V4 Flash · Fireworks` — the **Fallback · DeepSeek V4 Flash** toggle was selected and responded directly.
+- `Fallback · Fireworks` — Gemma 4 was requested but unreachable, so the request fell back to Fireworks.
 
 The badge is driven by `model_runtime` returned from `/api/agent`, not by the UI toggle alone.
 
@@ -128,7 +126,7 @@ The badge is driven by `model_runtime` returned from `/api/agent`, not by the UI
 3. **Materials:** AI creates clean notes, reviewer, flashcards, and quiz
 4. **Library:** Student views saved topic and materials in the Library
 5. **Translanguaging:** Student asks `unsa diay ang photosynthesis?` and gets Cebuano-first explanation
-6. **Model toggle:** Switch from the default serverless model to **Gemma 4** in the chat header for the demo
+6. **Model toggle:** Switch from the default **Gemma 4** to **Fallback · DeepSeek V4 Flash** in the chat header, then switch back to **Gemma 4**
 7. **Retrieval:** Student starts new chat and says `show my flashcards` — saved flashcards are retrieved
 8. **Quiz:** Student takes the quiz; score is saved and progress is updated
 9. **Profile:** Learning profile shows updated language confidence, strengths, weaknesses, and can be edited
@@ -139,7 +137,7 @@ Before testing Gemma, rehearse and verify the fallback path:
 
 1. Start the app with only `FIREWORKS_API_KEY` set (no Gemma endpoint).
 2. Select any demo persona and send a judge prompt.
-3. Confirm the learning trail completes and the badge reads `Auto · primary`.
+3. Confirm the learning trail completes and the badge reads `Fallback · Fireworks`.
 4. Switch the model toggle to **Gemma 4** and send another prompt.
 5. Confirm the response still succeeds and the badge reads `Fallback · Fireworks`.
 6. Only after the fallback path passes should you configure a real Gemma endpoint for Gate 2.
