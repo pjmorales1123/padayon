@@ -132,7 +132,7 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
     "hidden lg:flex min-h-0 cursor-col-resize items-center justify-center rounded-full bg-slate-300/70 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
-    <main className="flex h-[100dvh] flex-col bg-slate-100 overflow-hidden pb-16 box-border">
+    <main className="flex h-[calc(100dvh-4rem)] flex-col bg-slate-100 overflow-hidden box-border">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
@@ -266,7 +266,7 @@ export default function DemoWorkspace({ initialUserId, startFresh = false }: Dem
               🔍 Live agent trail — watch what the AI agents are working on in real time.
             </p>
           </div>
-          <AgentTrail requestId={activeRequestId} />
+          <AgentTrail requestId={activeRequestId} userId={userId} />
         </div>
       </div>
     </main>

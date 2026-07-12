@@ -26,12 +26,14 @@ describe("AgentTrail", () => {
       ),
     );
 
-    render(<AgentTrail requestId="req-1" />);
+    render(<AgentTrail requestId="req-1" userId="user-1" />);
 
     await waitFor(() => {
       expect(screen.queryAllByText("Classifier Agent").length).toBeGreaterThan(0);
       expect(screen.getByText(/all agents finished/i)).toBeTruthy();
       expect(screen.getByText("100%")).toBeTruthy();
+      expect(screen.getByText("Student:")).toBeTruthy();
+      expect(screen.getByText("Run ID:")).toBeTruthy();
     });
   });
 

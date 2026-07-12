@@ -5,6 +5,10 @@ export interface RetrievedMaterialContent {
   reviewer?: string;
   flashcards?: Array<{ front: string; back: string }>;
   quiz?: Array<{ question: string; choices: string[]; answer: string }>;
+  html?: string;
+  title?: string;
+  image_url?: string;
+  preview_image_url?: string;
 }
 
 export interface LastLesson {
@@ -116,6 +120,7 @@ export function formatRetrievedMaterial(type: string, content: RetrievedMaterial
   }
   if (type === "reviewer") return "\n\n" + (content.reviewer || "");
   if (type === "clean_notes" || type === "summary" || type === "story") return "\n\n" + (content.text || "");
+  if (type === "image_notes" || type === "pdf_notes") return "\n\n" + (content.text || "");
   return "";
 }
 

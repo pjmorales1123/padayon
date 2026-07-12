@@ -32,7 +32,10 @@ describe("visualDesignerAgent", () => {
     expect(htmlVisual.html).toContain("cdn.tailwindcss.com");
     expect(htmlVisual.html).toContain("DM Sans");
     expect(htmlVisual.html).toContain("grid grid-cols");
+    expect(htmlVisual.html).toContain("Character vs. self");
+    expect(htmlVisual.html).toContain("Character vs. character");
     expect(htmlVisual.html).toContain("👤⚔️👤");
+    expect(htmlVisual.html).toContain("🧠💭");
     expect(htmlVisual.html).toContain("rounded-2xl");
   });
 });

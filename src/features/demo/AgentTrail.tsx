@@ -13,6 +13,7 @@ interface AgentEvent {
 
 interface AgentTrailProps {
   requestId: string | null;
+  userId?: string | null;
 }
 
 const STEP_ORDER = [
@@ -97,7 +98,14 @@ function mergeStageEvents(events: AgentEvent[]): AgentEvent[] {
   for (const event of events) {
     byStep.set(event.step, event);
   }
-  return Array.from(byStep.values()).sort((a, b) => a.ts - b.ts);
+  return Array.from(byStep.values()).sort((a, b) => {
+    const idxA = STEP_ORDER.indexOf(a.step);
+    const idxB = STEP_ORDER.indexOf(b.step);
+    if (idxA === -1 && idxB === -1) return a.ts - b.ts;
+    if (idxA === -1) return 1;
+    if (idxB === -1) return -1;
+    return idxA - idxB;
+  });
 }
 
 function WorkingBubble({ event }: { event?: AgentEvent }) {
@@ -132,6 +140,14 @@ function ModelBadge({ label }: { label: string }) {
 }
 
 const TOTAL_STEP_UNITS = STEP_ORDER.length - 1;
+
+// Stop polling once a run reaches a terminal state so the monitor does not
+// keep spinning after the reply is delivered.
+function isTerminal(runEvents: AgentEvent[] | undefined) {
+  if (!runEvents || runEvents.length === 0) return false;
+  const last = runEvents[runEvents.length - 1];
+  return last.step === "finish" || last.status === "error";
+}
 
 function StatusBadge({ status }: { status: AgentEvent["status"] }) {
   if (status === "running") {
@@ -176,17 +192,29 @@ function SkeletonStep({ count = 4 }: { count?: number }) {
   );
 }
 
-export default function AgentTrail({ requestId }: AgentTrailProps) {
+export default function AgentTrail({ requestId, userId }: AgentTrailProps) {
   const [eventsById, setEventsById] = useState<Record<string, AgentEvent[]>>({});
   const [failuresById, setFailuresById] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const events = useMemo(() => (requestId ? eventsById[requestId] || [] : []), [eventsById, requestId]);
   const failures = useMemo(() => (requestId ? failuresById[requestId] || 0 : 0), [failuresById, requestId]);
 
   useEffect(() => {
     let cancelled = false;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    const stopPolling = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
 
     const poll = async () => {
       if (!requestId) return;
@@ -203,6 +231,9 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
         if (!cancelled && data.run?.events) {
           setEventsById((prev) => ({ ...prev, [requestId]: data.run!.events! }));
           setFailuresById((prev) => ({ ...prev, [requestId]: 0 }));
+          if (isTerminal(data.run.events)) {
+            stopPolling();
+          }
         }
       } catch {
         if (!cancelled) {
@@ -216,10 +247,10 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
     };
 
     poll();
-    const interval = setInterval(poll, 500);
+    intervalRef.current = setInterval(poll, 1000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stopPolling();
     };
   }, [requestId]);
 
@@ -238,11 +269,12 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
 
   const displayEvents = mergeStageEvents(events);
   const finished = displayEvents.some((e) => e.step === "finish" && e.status === "done");
-  const currentStep = displayEvents.length > 0 ? displayEvents[displayEvents.length - 1].step : null;
-  const currentIndex = currentStep ? STEP_ORDER.indexOf(currentStep) : -1;
+  const maxIndex = displayEvents.length > 0
+    ? Math.max(...displayEvents.map((e) => STEP_ORDER.indexOf(e.step)))
+    : -1;
   const progress = finished
     ? 100
-    : Math.min(Math.max(Math.round((currentIndex / TOTAL_STEP_UNITS) * 100), 0), 99);
+    : Math.min(Math.max(Math.round((maxIndex / TOTAL_STEP_UNITS) * 100), 0), 99);
 
   const runningEvent = [...displayEvents].reverse().find((e) => e.status === "running");
   const finishEvent = displayEvents.find((e) => e.step === "finish" && e.status === "done");
@@ -262,9 +294,16 @@ export default function AgentTrail({ requestId }: AgentTrailProps) {
             ● live
           </span>
         </div>
-        <p className="mt-1 text-xs text-slate-400 truncate">
-          Request ID: <code className="text-slate-300">{requestId}</code>
-        </p>
+        <div className="mt-1 space-y-1 text-xs text-slate-400">
+          {userId ? (
+            <p className="truncate">
+              Student: <code className="text-slate-300">{userId}</code>
+            </p>
+          ) : null}
+          <p className="truncate">
+            Run ID: <code className="text-slate-300">{requestId}</code>
+          </p>
+        </div>
         <div className="mt-3">
           <div className="mb-1 flex justify-between text-xs text-slate-400">
             <span>Pipeline progress</span>

@@ -678,10 +678,11 @@ Rules:
 - The html value must be a complete <!DOCTYPE html> document.
 - Load Tailwind CSS with this exact tag in the <head>: <script src="https://cdn.tailwindcss.com"></script>.
 - Load a clean font such as DM Sans or Inter from Google Fonts.
-- Use emoji as large visual icons at the top of each concept card (e.g., 👤⚔️👤, 🧠💭, 👤🆚🌍).
+- Use emoji as large visual icons at the top of each concept card (e.g., 👤⚔️👤, 🧠💭, 👤🆚🌍), but keep them distinct across cards instead of repeating the same icon everywhere.
 - Lay out concepts as a responsive grid of rounded cards with soft shadows and pastel backgrounds.
 - Use geometric shapes, connecting lines, or arrows between cards when showing relationships or flow.
 - Keep text short and readable; put detailed explanations inside cards or below the icon.
+- Avoid repeating the same sentence fragment in both the title and the body of a card.
 - Do not use external images, <img>, or <canvas>.
 - Do not use JavaScript.
 - Do not include markdown code fences or any text outside the JSON object.`;
@@ -715,7 +716,7 @@ ${flashcards}
 Design requirements (Canva Code style):
 1. Use Tailwind CSS classes for layout, spacing, colors, rounded corners, and shadows. Load Tailwind with <script src="https://cdn.tailwindcss.com"></script>.
 2. Display each main concept as a rounded card in a responsive grid (1 col on mobile, 2-3 cols on larger screens).
-3. Place a large emoji icon (or emoji combo) at the top of every card to represent the concept visually.
+3. Place a large emoji icon (or emoji combo) at the top of every card to represent the concept visually, and vary the icons so different concepts do not all look the same.
 4. Add a bold card title and a one-sentence description below the icon.
 5. Include a central title/header for the topic using a gradient or colored background.
 6. Use connecting lines, arrows, or a simple flow diagram between cards when the topic has steps or relationships.
@@ -731,23 +732,117 @@ function buildFastHtmlVisual(
   classification: Classification
 ): { title: string; html: string } {
   const lang = classification.language_detected || "English";
-  const keyPoints = (studyPack.clean_notes || studyPack.summary || `Learn about ${topic}.`)
-    .split(/\.|\n/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 10 && s.length < 140)
-    .slice(0, 5);
-
+  const sourceText = studyPack.clean_notes || studyPack.summary || `Learn about ${topic}.`;
   const flashcards = (studyPack.flashcards || []).slice(0, 3);
   const topicLower = topic.toLowerCase();
+  const conflictIcons = ["💥", "🧠💭", "👤⚔️👤", "👤🆚🌦️", "👤🆚🏛️", "👤🆚⚙️"];
+
+  const sanitizeSentence = (text: string) =>
+    text
+      .replace(/^[-*\d.)\s]+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const sentenceCase = (text: string) => {
+    if (!text) return text;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+
+  const trimSentenceEnd = (text: string) => text.replace(/[.;:,]\s*$/, "").trim();
+
+  const buildGenericCards = () => {
+    const seen = new Set<string>();
+    return sourceText
+      .split(/\n|(?<=[.!?])\s+/)
+      .map(sanitizeSentence)
+      .filter((s) => s.length > 16 && s.length < 160)
+      .filter((s) => {
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 5)
+      .map((line, index) => {
+        const titleMatch = line.match(/^([^:.-]{4,48})[:.-]\s+(.+)$/);
+        const title = trimSentenceEnd(titleMatch ? titleMatch[1] : line.split(",")[0].split(" ").slice(0, 4).join(" "));
+        const bodySource = titleMatch ? titleMatch[2] : line;
+        const normalizedBody = bodySource.toLowerCase().startsWith(title.toLowerCase())
+          ? bodySource.slice(title.length).trim()
+          : bodySource;
+        const body = sentenceCase(trimSentenceEnd(normalizedBody)) || sentenceCase(line);
+        return {
+          icon: ["💡", "🧩", "📘", "🎯", "🌟"][index % 5],
+          title: title || `Point ${index + 1}`,
+          body,
+        };
+      });
+  };
+
+  const buildConflictCards = () => {
+    const lowerText = sourceText.toLowerCase();
+    const cards = [
+      {
+        icon: conflictIcons[0],
+        title: "Conflict",
+        body: "Conflict is the struggle between opposing forces in a story.",
+      },
+      {
+        icon: conflictIcons[1],
+        title: "Internal conflict",
+        body: "This happens inside a character through doubts, fears, guilt, or hard choices.",
+      },
+    ];
+
+    if (/\b(person|character|man)\s*(vs|versus)\s*(self|inner)|internal conflict|doubt|fear|guilt|moral/i.test(lowerText)) {
+      cards.push({
+        icon: conflictIcons[2],
+        title: "Character vs. self",
+        body: "A character struggles with thoughts, feelings, or decisions inside their own mind.",
+      });
+    }
+    if (/\b(person|character|man)\s*(vs|versus)\s*(person|character|man)|another character|opponent/i.test(lowerText)) {
+      cards.push({
+        icon: "👤⚔️👤",
+        title: "Character vs. character",
+        body: "A character faces another person with a different goal, belief, or action.",
+      });
+    }
+    if (/\b(person|character|man)\s*(vs|versus)\s*(nature)|storm|typhoon|weather|animal|flood|earthquake/i.test(lowerText)) {
+      cards.push({
+        icon: "👤🆚🌦️",
+        title: "Character vs. nature",
+        body: "A character struggles against weather, animals, or other natural forces.",
+      });
+    }
+    if (/\b(person|character|man)\s*(vs|versus)\s*(society)|rule|law|tradition|community|government|school policy/i.test(lowerText)) {
+      cards.push({
+        icon: "👤🆚🏛️",
+        title: "Character vs. society",
+        body: "A character struggles against a rule, system, tradition, or social expectation.",
+      });
+    }
+    if (/\b(person|character|man)\s*(vs|versus)\s*(technology|machine)|robot|computer|ai/i.test(lowerText)) {
+      cards.push({
+        icon: "👤🆚⚙️",
+        title: "Character vs. technology",
+        body: "A character struggles with tools, machines, or technology that create a problem.",
+      });
+    }
+
+    return cards.slice(0, 5);
+  };
+
+  const cards = topicLower.includes("conflict") ? buildConflictCards() : buildGenericCards();
 
   const emojiFor = (text: string, index: number): string => {
     const lower = text.toLowerCase();
     if (topicLower.includes("conflict")) {
-      if (lower.includes("person") || lower.includes("man") || lower.includes("character")) return "👤⚔️👤";
       if (lower.includes("self") || lower.includes("inner")) return "🧠💭";
       if (lower.includes("society") || lower.includes("community")) return "👤🆚🏛️";
-      if (lower.includes("nature") || lower.includes("environment")) return "👤🆚🌍";
+      if (lower.includes("nature") || lower.includes("environment") || lower.includes("storm")) return "👤🆚🌦️";
       if (lower.includes("technology") || lower.includes("machine")) return "👤🆚⚙️";
+      if (lower.includes("person") || lower.includes("man") || lower.includes("character")) return "👤⚔️👤";
     }
     if (topicLower.includes("photosynthesis")) {
       if (lower.includes("sun") || lower.includes("light")) return "☀️";
@@ -768,21 +863,18 @@ function buildFastHtmlVisual(
     "bg-violet-50 border-violet-200",
   ];
 
-  const conceptCards = keyPoints.map((p, i) => {
-    const words = escapeHtml(p).split(" ");
-    const title = words.slice(0, 4).join(" ") || `Point ${i + 1}`;
-    const desc = words.slice(4).join(" ") || escapeHtml(p);
+  const conceptCards = cards.map((card, i) => {
     return `
     <div class="${cardBg[i % cardBg.length]} border rounded-2xl p-5 text-center shadow-sm hover:shadow-md transition-shadow">
-      <div class="text-5xl mb-3">${emojiFor(p, i)}</div>
-      <h3 class="font-bold text-slate-800 mb-1">${title}</h3>
-      <p class="text-sm text-slate-600 leading-snug">${desc}</p>
+      <div class="text-5xl mb-3">${card.icon || emojiFor(card.title, i)}</div>
+      <h3 class="font-bold text-slate-800 mb-1">${escapeHtml(card.title)}</h3>
+      <p class="text-sm text-slate-600 leading-snug">${escapeHtml(card.body)}</p>
     </div>`;
   }).join("");
 
   const flashCards = flashcards.map((c, i) => `
     <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-center shadow-sm">
-      <div class="text-2xl mb-2">${emojiFor(c.front, i + keyPoints.length)}</div>
+      <div class="text-2xl mb-2">${emojiFor(c.front, i + cards.length)}</div>
       <h4 class="font-semibold text-indigo-900 text-sm mb-1">${escapeHtml(c.front)}</h4>
       <p class="text-xs text-indigo-700">${escapeHtml(c.back)}</p>
     </div>`).join("");
@@ -815,6 +907,10 @@ export async function htmlVisualAgent(
   classification: Classification,
   model: ModelPreference = "auto"
 ): Promise<{ title: string; html: string } | null> {
+  if (model === "fallback") {
+    return buildFastHtmlVisual(topic, studyPack, classification);
+  }
+
   const userPrompt = buildVisualUserPrompt(topic, studyPack, classification);
 
   try {
@@ -848,6 +944,99 @@ export async function htmlVisualAgent(
 
   // Fast fallback: reliable, instant visual with icons, lines, and shapes.
   return buildFastHtmlVisual(topic, studyPack, classification);
+}
+
+function capitalizeFirst(text: string): string {
+  return text.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function deriveComparisonHeaders(topic: string): string[] {
+  const lower = topic.toLowerCase();
+  if (lower.includes("conflict")) return ["Type of Conflict", "Description"];
+  if (lower.includes("point of view") || lower.includes("pov")) return ["Point of View", "Description"];
+  if (lower.includes("irony")) return ["Type of Irony", "Description"];
+  if (lower.includes("metaphor") || lower.includes("simile") || lower.includes("personification") || lower.includes("hyperbole")) {
+    return ["Figure of Speech", "Description"];
+  }
+  return ["Feature", "Details"];
+}
+
+function deriveComparisonRows(topic: string, studyPack: StudyPack): string[][] | null {
+  const text = studyPack.clean_notes || studyPack.summary || "";
+  // Split into sentences/lines, but keep periods inside abbreviations intact.
+  const candidates = text
+    .split(/\n|(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 10 && s.length < 220);
+
+  const knownTerms = [
+    "internal conflict",
+    "external conflict",
+    "character vs self",
+    "character vs character",
+    "character vs nature",
+    "character vs society",
+    "character vs technology",
+    "first person point of view",
+    "second person point of view",
+    "third person point of view",
+    "first person",
+    "second person",
+    "third person",
+    "dramatic irony",
+    "situational irony",
+    "verbal irony",
+    "metaphor",
+    "simile",
+    "personification",
+    "hyperbole",
+  ];
+
+  const rows: string[][] = [];
+
+  for (const item of candidates) {
+    // Pattern: "Term: definition" or "Term - definition"
+    const delimiterMatch = item.match(/^([^:–—-]+)[:–—-]\s*(.+)$/);
+    if (delimiterMatch) {
+      const term = delimiterMatch[1].trim().replace(/^[-*\d.\s]+/, "");
+      const definition = delimiterMatch[2].trim().replace(/^[\s)]+/, "").replace(/[\s)]+$/, "");
+      if (term.length > 1 && definition.length > 5) {
+        rows.push([capitalizeFirst(term), definition]);
+        continue;
+      }
+    }
+
+    // Pattern: item starts with a known term/category.
+    const lower = item.toLowerCase();
+    const matchedTerm = knownTerms.find((t) => lower.startsWith(t));
+    if (matchedTerm) {
+      let rest = item.slice(matchedTerm.length).replace(/^[ ,)]+/, "").trim();
+      rest = rest.replace(/^(is|means|refers to|happens|occurs|involves)\s+/i, "");
+      if (rest.length > 5) {
+        rows.push([capitalizeFirst(matchedTerm), rest]);
+        continue;
+      }
+    }
+
+    // Pattern: "X vs Y" or "X versus Y" inside the item — split there.
+    const versusMatch = item.match(/^(.{2,60})\s+(?:vs\.?|versus)\s+(.{2,120})$/i);
+    if (versusMatch) {
+      rows.push([capitalizeFirst(versusMatch[1].trim()), capitalizeFirst(versusMatch[2].trim())]);
+      continue;
+    }
+  }
+
+  // If the topic explicitly asks for a comparison but we could not extract clean rows,
+  // build a simple "What it is / What it is not" table from the summary so we never
+  // fall back to the old word-split behavior.
+  if (rows.length === 0 && candidates.length >= 2) {
+    const first = candidates[0];
+    const second = candidates.slice(1).find((s) => !first.toLowerCase().includes(s.toLowerCase())) || candidates[1];
+    rows.push(["What it is", first.replace(/^[-*\d.\s]+/, "").trim()]);
+    rows.push(["What it is not", second.replace(/^[-*\d.\s]+/, "").trim()]);
+  }
+
+  return rows.length >= 2 ? rows : null;
 }
 
 export async function visualDesignerAgent(
@@ -885,31 +1074,27 @@ export async function visualDesignerAgent(
   }
 
   if (wantsTable) {
-    // Try to derive a comparison table from clean notes or quiz
-    const headers = ["Feature", "Details"];
-    const rows: string[][] = [];
-    const sentences = (studyPack.clean_notes || studyPack.summary || "")
-      .split(/\.|\n/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 10);
-    sentences.slice(0, 6).forEach((s) => {
-      const parts = s.split(/:\s*/);
-      if (parts.length >= 2) {
-        rows.push([parts[0].trim(), parts.slice(1).join(": ").trim()]);
-      } else if (s.toLowerCase().includes(" ")) {
-        const words = s.split(" ");
-        const mid = Math.ceil(words.length / 2);
-        rows.push([words.slice(0, mid).join(" "), words.slice(mid).join(" ")]);
-      }
-    });
-    if (rows.length > 0) {
+    // Derive a meaningful comparison table from the study pack. Avoid the old
+    // word-split fallback that produced broken rows like "Conflict is the | struggle between..."
+    const rows = deriveComparisonRows(topicTitle, studyPack);
+    if (rows) {
       return {
         type: "comparison_table",
         topic: topicTitle,
         topicId,
-        headers,
+        headers: deriveComparisonHeaders(topicTitle),
         rows,
       };
+    }
+    // No clean comparison structure — fall back to info cards instead of a broken table.
+    const fallbackCards = (studyPack.clean_notes || studyPack.summary || "")
+      .split(/\n|(?<=[.!?])\s+/)
+      .map((s) => s.replace(/^[-*\d.\s]+/, "").trim())
+      .filter((s) => s.length > 10 && s.length < 160)
+      .slice(0, 4)
+      .map((line) => ({ icon: "📝", title: "Key point", body: line }));
+    if (fallbackCards.length > 0) {
+      return { type: "info_cards", topic: topicTitle, topicId, cards: fallbackCards };
     }
   }
 

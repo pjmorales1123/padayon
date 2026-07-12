@@ -1,6 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+function normalizeTopicKey(value: string | null | undefined) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function mergeMaterialLists(existing: Array<Record<string, unknown>>, incoming: Array<Record<string, unknown>>) {
+  const byType = new Map<string, Record<string, unknown>>();
+  for (const material of [...existing, ...incoming]) {
+    const type = String(material.type || "");
+    const current = byType.get(type);
+    const materialCreatedAt = String(material.created_at || "");
+    const currentCreatedAt = String(current?.created_at || "");
+    if (!current || materialCreatedAt >= currentCreatedAt) {
+      byType.set(type, material);
+    }
+  }
+  return Array.from(byType.values());
+}
+
+function dedupeTopicsForLibrary(subjects: Array<Record<string, unknown>>) {
+  return subjects.map((subject) => {
+    const topics = Array.isArray(subject.topics) ? (subject.topics as Array<Record<string, unknown>>) : [];
+    const merged = new Map<string, Record<string, unknown>>();
+
+    for (const topic of topics) {
+      const key = normalizeTopicKey(String(topic.title || ""));
+      if (!key) continue;
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, { ...topic, materials: Array.isArray(topic.materials) ? topic.materials : [] });
+        continue;
+      }
+
+      const existingLast = String(existing.last_studied_at || "");
+      const topicLast = String(topic.last_studied_at || "");
+      const newer = topicLast >= existingLast ? topic : existing;
+      merged.set(key, {
+        ...existing,
+        ...newer,
+        materials: mergeMaterialLists(
+          Array.isArray(existing.materials) ? (existing.materials as Array<Record<string, unknown>>) : [],
+          Array.isArray(topic.materials) ? (topic.materials as Array<Record<string, unknown>>) : [],
+        ),
+      });
+    }
+
+    return {
+      ...subject,
+      topics: Array.from(merged.values()).sort((a, b) => {
+        const aTime = new Date(String(a.last_studied_at || 0)).getTime();
+        const bTime = new Date(String(b.last_studied_at || 0)).getTime();
+        return bTime - aTime;
+      }),
+    };
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -25,7 +85,7 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ subjects });
+    return NextResponse.json({ subjects: dedupeTopicsForLibrary((subjects || []) as Array<Record<string, unknown>>) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message }, { status: 500 });

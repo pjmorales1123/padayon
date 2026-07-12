@@ -33,6 +33,8 @@ interface MaterialContent {
   quiz?: Array<{ question: string; choices: string[]; answer: string; explanation?: string }>;
   image_url?: string;
   preview_image_url?: string;
+  html?: string;
+  title?: string;
 }
 
 const RETRIEVAL_INTENTS = [
@@ -66,6 +68,69 @@ interface ActiveTopic {
   subcategory: string | null;
   subjectId: string;
   subjectName: string;
+}
+
+function normalizeTopicKey(value: string | null | undefined) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function canonicalizeClassificationToCurriculum(
+  classification: { subject: string; subcategory: string; topic: string; intent: string; language_detected: string; confidence: number },
+  curriculum: { subject: string; subcategory: string; topic: string; is_competency_aligned: boolean }
+) {
+  if (!curriculum.is_competency_aligned) return classification;
+  return {
+    ...classification,
+    subject: curriculum.subject || classification.subject,
+    subcategory: curriculum.subcategory || classification.subcategory,
+    topic: curriculum.topic || classification.topic,
+  };
+}
+
+function pickExistingTopic(
+  topics: Topic[],
+  classification: { topic: string; subcategory: string },
+  curriculum: { topic: string; subcategory: string; is_competency_aligned: boolean }
+) {
+  const aliases = new Set([
+    normalizeTopicKey(classification.topic),
+    normalizeTopicKey(curriculum.is_competency_aligned ? curriculum.topic : ""),
+  ]);
+  const normalizedSubcategory = normalizeTopicKey(classification.subcategory);
+
+  return topics.find((topic) => {
+    const titleKey = normalizeTopicKey(topic.title);
+    if (aliases.has(titleKey)) return true;
+    const curriculumTopic = normalizeTopicKey(String((topic.curriculum_match as { topic?: string } | null)?.topic || ""));
+    if (curriculumTopic && aliases.has(curriculumTopic)) return true;
+    return (
+      normalizedSubcategory &&
+      normalizeTopicKey(topic.subcategory || "") === normalizedSubcategory &&
+      (aliases.has(titleKey) || aliases.has(curriculumTopic))
+    );
+  }) || null;
+}
+
+function findRequestedMaterial(
+  requestedType: string | null,
+  materials: Array<{ type: string; content: MaterialContent; created_at?: string | null }>
+) {
+  if (!requestedType) return null;
+  if (requestedType === "uploaded_notes") {
+    return [...materials]
+      .filter((material) => material.type === "image_notes" || material.type === "pdf_notes")
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0] || null;
+  }
+  if (requestedType === "html_visual") {
+    return [...materials]
+      .filter((material) => material.type === "html_visual")
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0] || null;
+  }
+  return materials.find((material) => material.type === requestedType) || null;
 }
 
 function buildStudyPackConfirmation(
@@ -325,8 +390,15 @@ function mapIntentToType(intent: string, message: string): string | null {
   if (intent === "make_reviewer") return "reviewer";
   if (intent === "make_summary") return "summary";
   if (intent === "make_story") return "story";
+  if (intent === "make_visual") return "html_visual";
   if (intent === "retrieve_material") {
     const lower = message.toLowerCase();
+    if (/(recent|latest|last).*(visual|diagram|infographic|chart)|show.*(visual|diagram|infographic|chart)|my visual/i.test(lower)) return "html_visual";
+    if (/(uploaded|upload|sent).*(notes|image|picture|photo|pdf)|my uploads?|show.*(upload|picture|photo|pdf)/i.test(lower)) {
+      if (lower.includes("pdf")) return "pdf_notes";
+      if (lower.includes("image") || lower.includes("picture") || lower.includes("photo")) return "image_notes";
+      return "uploaded_notes";
+    }
     if (lower.includes("flashcard")) return "flashcards";
     if (lower.includes("quiz")) return "quiz";
     if (lower.includes("reviewer") || lower.includes("review")) return "reviewer";
@@ -342,10 +414,18 @@ function buildRetrievalInteractive(
   requestedType: string | null,
   topicId: string,
   topicTitle: string,
-  materials: Array<{ type: string; content: MaterialContent }>
+  materials: Array<{ type: string; content: MaterialContent; created_at?: string | null }>
 ): InteractivePayload | null {
   const type = requestedType;
   if (!type) return null;
+
+  if (type === "html_visual") {
+    const found = findRequestedMaterial(type, materials);
+    const html = found?.content?.html;
+    if (html) {
+      return { type: "html_visual", topic: topicTitle, topicId, title: found.content.title || `${topicTitle} Visual`, html };
+    }
+  }
 
   if (type === "flashcards") {
     const found = materials.find((m) => m.type === "flashcards");
@@ -390,6 +470,24 @@ function buildRetrievalInteractive(
     const text = found?.content?.text;
     if (text) {
       return { type: "info_cards", topic: topicTitle, topicId, cards: [{ icon: "📖", title: "Story", body: text }] };
+    }
+  }
+
+  if (type === "image_notes" || type === "pdf_notes" || type === "uploaded_notes") {
+    const found = findRequestedMaterial(type, materials);
+    const text = found?.content?.text;
+    if (text) {
+      return {
+        type: "info_cards",
+        topic: topicTitle,
+        topicId,
+        cards: text
+          .split("\n")
+          .map((line) => line.replace(/^[-*\d.\s]+/, "").trim())
+          .filter((line) => line.length > 4)
+          .slice(0, 4)
+          .map((line) => ({ icon: found?.type === "pdf_notes" ? "📄" : "📷", title: "Uploaded note", body: line })),
+      };
     }
   }
 
@@ -502,6 +600,7 @@ async function applyMemoryUpdate(
 
 export async function POST(req: NextRequest) {
   let modelRuntime: ModelRuntime | null = null;
+  let requestId = "";
 
   try {
     const body = await req.json();
@@ -515,7 +614,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing userId or message", model_runtime: modelRuntime }, { status: 400 });
     }
 
-    const requestId = clientRequestId || `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    requestId = clientRequestId || `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startRun(requestId, userId, message);
     logStep(requestId, "start", "Received student message", "done", { messageLength: message.length });
 
@@ -659,6 +758,7 @@ export async function POST(req: NextRequest) {
     logStep(requestId, "curriculum", "Curriculum Agent: aligning to Grade 9 competencies", "running");
     const curriculum = await curriculumAgent(classification, preferredModel);
     logStep(requestId, "curriculum", `Aligned to ${curriculum.grade_level} competency`, "done", { curriculum });
+    classification = canonicalizeClassificationToCurriculum(classification, curriculum);
 
     const hasUpload = Boolean(imageUrl);
     const shouldPersistTopic =
@@ -783,17 +883,16 @@ export async function POST(req: NextRequest) {
         .from("topics")
         .select("*")
         .eq("subject_id", subject.id)
-        .ilike("title", classification.topic)
-        .limit(1);
-      topic = topics?.[0] || null;
+        .order("last_studied_at", { ascending: false });
+      topic = pickExistingTopic((topics || []) as Topic[], classification, curriculum);
 
       if (!topic) {
         const { data: newTopic, error: topicErr } = await supabaseAdmin!
           .from("topics")
           .insert({
             subject_id: subject.id,
-            title: classification.topic,
-            subcategory: classification.subcategory,
+            title: curriculum.is_competency_aligned ? curriculum.topic : classification.topic,
+            subcategory: curriculum.is_competency_aligned ? curriculum.subcategory : classification.subcategory,
             curriculum_match: curriculum,
             last_studied_at: new Date().toISOString(),
           })
@@ -829,6 +928,7 @@ export async function POST(req: NextRequest) {
       await supabaseAdmin!.from("messages").insert({ user_id: userId, topic_id: topic.id, role: "user", content: message });
       await supabaseAdmin!.from("messages").insert({ user_id: userId, topic_id: topic.id, role: "assistant", content: alignmentReply });
       logStep(requestId, "save_reply", "Teacher-alignment reply saved", "done");
+      logStep(requestId, "finish", "Response complete", "done");
       return NextResponse.json({ requestId, reply: alignmentReply, classification, curriculum, topic, materials_created: [], saved_materials: [], interactive: null, memory_update: null, model_runtime: modelRuntime });
     }
 
@@ -853,7 +953,11 @@ export async function POST(req: NextRequest) {
     const replyHistory = getReplyHistoryForIntent(classification.intent, history);
 
     async function loadMaterialsForTopic(topicId: string) {
-      const { data } = await supabaseAdmin!.from("materials").select("*").eq("topic_id", topicId);
+      const { data } = await supabaseAdmin!
+        .from("materials")
+        .select("*")
+        .eq("topic_id", topicId)
+        .order("created_at", { ascending: false });
       return data || [];
     }
 
@@ -891,11 +995,25 @@ export async function POST(req: NextRequest) {
       const requestedType = mapIntentToType(classification.intent, message);
 
       if (requestedType) {
-        const found = materials?.find((m) => m.type === requestedType);
+        const found = findRequestedMaterial(
+          requestedType,
+          (materials || []) as Array<{ type: string; content: MaterialContent; created_at?: string | null }>
+        );
         if (found) {
-          reply = `Here are your saved ${classification.topic} ${requestedType} from ${classification.subject} → ${classification.subcategory}.`;
-          reply += formatRetrievedMaterial(requestedType, found.content);
-          interactive = buildRetrievalInteractive(requestedType, topic.id, topic.title, materials || []);
+          const label =
+            requestedType === "html_visual"
+              ? "visual"
+              : requestedType === "uploaded_notes"
+                ? "uploaded notes"
+                : requestedType.replace(/_/g, " ");
+          reply = `Here ${requestedType === "html_visual" ? "is" : "are"} your saved ${label} for ${classification.topic} from ${classification.subject} → ${classification.subcategory}.`;
+          reply += formatRetrievedMaterial(found.type, found.content);
+          interactive = buildRetrievalInteractive(
+            requestedType,
+            topic.id,
+            topic.title,
+            (materials || []) as Array<{ type: string; content: MaterialContent; created_at?: string | null }>
+          );
           logStep(requestId, "retrieve", `Returned saved ${requestedType}`, "done", { type: requestedType });
         } else {
           reply = `I don't have ${requestedType} for ${classification.topic} yet. Let me create them!`;
@@ -1158,6 +1276,33 @@ export async function POST(req: NextRequest) {
       interactive = await visualDesignerAgent(message, topic.id, topic.title, studyPack, classification, preferredModel);
     }
 
+    if (topic && interactive?.type === "html_visual") {
+      const visualMaterial = {
+        topic_id: topic.id,
+        type: "html_visual",
+        title: interactive.title || "Visual Guide",
+        content: { html: interactive.html, title: interactive.title || "Visual Guide" },
+      };
+      const { data: existingVisual } = await supabaseAdmin!
+        .from("materials")
+        .select("id")
+        .eq("topic_id", topic.id)
+        .eq("type", "html_visual")
+        .maybeSingle();
+
+      if (existingVisual?.id) {
+        await supabaseAdmin!
+          .from("materials")
+          .update({ title: visualMaterial.title, content: visualMaterial.content })
+          .eq("id", existingVisual.id);
+      } else {
+        await supabaseAdmin!.from("materials").insert(visualMaterial);
+      }
+      if (!materials_created.includes("html_visual")) {
+        materials_created.push("html_visual");
+      }
+    }
+
     // Student-helpfulness review (demo "thinking mode"): polish the final reply before saving.
     if (reply && classification.intent !== "create_study_pack") {
       reply = await studentReplyReview(
@@ -1220,6 +1365,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Agent error:", err);
+    if (requestId) {
+      logStep(requestId, "error", err instanceof Error ? err.message : "Internal error", "error");
+    }
     const message = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: message, model_runtime: modelRuntime }, { status: 500 });
   }

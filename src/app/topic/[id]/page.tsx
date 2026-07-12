@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
+import HtmlVisual from "@/components/chat/widgets/HtmlVisual";
 import { buildAppHref } from "@/lib/navigation";
 
 const DEMO_USER_ID = "demo-user-id";
@@ -14,6 +15,8 @@ interface Material {
   title: string;
   content: {
     text?: string;
+    html?: string;
+    title?: string;
     image_url?: string;
     preview_image_url?: string;
     flashcards?: Array<{ front: string; back: string }>;
@@ -47,6 +50,7 @@ const tabs = [
   "Uploads",
   "Original Notes",
   "Clean Notes",
+  "Visual",
   "Reviewer",
   "Flashcards",
   "Quiz",
@@ -366,6 +370,18 @@ function TopicPageInner() {
               <MarkdownRenderer>{m.content.text}</MarkdownRenderer>
             ) : (
               <p className="text-slate-400">No clean notes yet.</p>
+            )}
+          </div>
+        );
+      }
+      case "Visual": {
+        const m = getMaterial("html_visual");
+        return (
+          <div className="bg-white rounded-xl p-4 border border-slate-200">
+            {m?.content?.html ? (
+              <HtmlVisual topic={topic.title} title={m.content.title || m.title || `${topic.title} Visual`} html={m.content.html} />
+            ) : (
+              <p className="text-slate-400">No visual saved yet.</p>
             )}
           </div>
         );
