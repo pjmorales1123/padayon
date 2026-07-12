@@ -17,8 +17,10 @@ import { startRun, logStep } from "@/lib/agent-events";
 import { isVisualLearningRequest } from "@/lib/visual-request";
 import {
   formatRetrievedMaterial,
+  getLastLessonReply,
   getReplyHistoryForIntent,
   getUploadMaterialContent,
+  isLastLessonQuestion,
   shouldPersistTopicForTurn,
 } from "@/lib/agent-routing";
 
@@ -586,6 +588,24 @@ export async function POST(req: NextRequest) {
 
     // 3. Research / topic recovery path
     if (classification.intent === "research_topics") {
+      if (lastActiveTopic && isLastLessonQuestion(message)) {
+        const reply = getLastLessonReply(lastActiveTopic);
+        const activeTopic = {
+          id: lastActiveTopic.topicId,
+          title: lastActiveTopic.topicTitle,
+          subject_id: lastActiveTopic.subjectId,
+          subcategory: lastActiveTopic.subcategory,
+        };
+
+        await supabaseAdmin!.from("messages").insert([
+          { user_id: userId, topic_id: lastActiveTopic.topicId, role: "user", content: message },
+          { user_id: userId, topic_id: lastActiveTopic.topicId, role: "assistant", content: reply },
+        ]);
+        logStep(requestId, "research", `Returned last lesson: ${lastActiveTopic.topicTitle}`, "done");
+        logStep(requestId, "finish", "Response complete", "done");
+        return NextResponse.json({ requestId, reply, classification, curriculum: null, topic: activeTopic, materials_created: [], saved_materials: [], interactive: null, memory_update: null, model_runtime: modelRuntime });
+      }
+
       logStep(requestId, "research", "Research Agent: finding related topics", "running");
 
       let curriculumQuery = supabaseAdmin!.from("curriculum_items").select("subject,topic,competency").limit(20);

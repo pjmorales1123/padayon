@@ -7,6 +7,12 @@ export interface RetrievedMaterialContent {
   quiz?: Array<{ question: string; choices: string[]; answer: string }>;
 }
 
+export interface LastLesson {
+  subjectName: string;
+  subcategory: string | null;
+  topicTitle: string;
+}
+
 const OFFICIAL_TOPIC_INTENTS = new Set([
   "create_study_pack",
   "make_flashcards",
@@ -83,6 +89,17 @@ export function getUploadMaterialContent(attachmentType: string | undefined, ima
   return attachmentType === "pdf"
     ? { preview_image_url: imageUrl, text }
     : { image_url: imageUrl, text };
+}
+
+export function isLastLessonQuestion(message: string) {
+  return /last lesson|last topic|what did we (learn|discuss)|where did we (leave off|stop)|last time/i.test(message);
+}
+
+export function getLastLessonReply(lastLesson: LastLesson) {
+  const location = lastLesson.subcategory
+    ? `${lastLesson.subjectName} → ${lastLesson.subcategory}`
+    : lastLesson.subjectName;
+  return `Your last lesson was **${lastLesson.topicTitle}** in ${location}. What would you like to do next: see the clean notes, review flashcards, take the quiz, or view a visual guide?`;
 }
 
 export function formatRetrievedMaterial(type: string, content: RetrievedMaterialContent): string {

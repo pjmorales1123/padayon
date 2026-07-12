@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatRetrievedMaterial,
+  getLastLessonReply,
   getReplyHistoryForIntent,
   getUploadConfirmation,
   getUploadMaterialContent,
@@ -8,6 +9,16 @@ import {
 } from "./agent-routing";
 
 describe("agent routing", () => {
+  it("answers a last-lesson question with the learner's actual latest topic", () => {
+    expect(
+      getLastLessonReply({
+        subjectName: "English",
+        subcategory: "Literary Conflict",
+        topicTitle: "Types of Conflict in Literature",
+      })
+    ).toContain("Types of Conflict in Literature");
+  });
+
   it("returns saved clean notes in a retrieval reply", () => {
     expect(
       formatRetrievedMaterial("clean_notes", { text: "Characters can be dynamic or static." })
