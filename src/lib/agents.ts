@@ -660,6 +660,60 @@ Current profile: ${JSON.stringify(profile)}`;
   };
 }
 
+const VISUAL_LLM_TIMEOUT_MS = 12000;
+
+const VISUAL_SYSTEM_PROMPT = `You are an expert visual designer and front-end developer. Your job is to turn a lesson topic into a single, self-contained HTML visual that looks like a clean Canva-style infographic.
+
+Rules:
+- Return ONLY valid JSON with this shape: {"title": "...", "html": "..."}
+- The html value must be a complete <!DOCTYPE html> document with inline CSS.
+- Use only inline SVG for graphics. Do not use <img>, <canvas>, or external assets.
+- Include simple SVG icons, geometric shapes, connecting arrows, and lines that show relationships.
+- Use a modern, soft color palette (pastel cards, subtle gradients, rounded corners).
+- The layout must be responsive and readable on a phone screen.
+- Label every shape or icon clearly with short text.
+- Keep the visual compact but informative.
+- Do not use JavaScript.
+- Do not include markdown code fences or any text outside the JSON object.`;
+
+function buildVisualUserPrompt(
+  topic: string,
+  studyPack: StudyPack,
+  classification: Classification
+): string {
+  const lang = classification.language_detected || "English";
+  const notes = studyPack.clean_notes || studyPack.summary || `Learn about ${topic}.`;
+  const keyPoints = notes
+    .split(/\.|\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 10 && s.length < 120)
+    .slice(0, 5);
+  const flashcards = (studyPack.flashcards || [])
+    .slice(0, 3)
+    .map((c, i) => `${i + 1}. ${c.front} → ${c.back}`)
+    .join("\n") || "None";
+
+  return `Create a Canva-style visual infographic for the topic "${topic}".
+Language: ${lang}
+
+Key points to visualize (use these as labeled nodes or steps):
+${keyPoints.map((p, i) => `${i + 1}. ${p}`).join("\n") || "1. Explore the topic step by step."}
+
+Flashcards to include as mini summary boxes:
+${flashcards}
+
+Design requirements:
+1. Use a centered card layout with a colored gradient header.
+2. Include an SVG diagram with icons and connecting arrows/lines.
+3. Use simple SVG icon shapes such as circles for concepts, rounded rectangles for steps, and arrows for flow.
+4. Add a short key-point list; place a small SVG icon (checkmark, star, or lightbulb) next to each point.
+5. Include 2-3 small visual summary boxes for important terms.
+6. Use CSS only (no JavaScript).
+7. Make it look polished and friendly, like a Canva infographic.
+
+Return JSON only.`;
+}
+
 function buildFastHtmlVisual(
   topic: string,
   studyPack: StudyPack,
@@ -680,90 +734,50 @@ function buildFastHtmlVisual(
       </div>
     </div>`).join("");
 
-  const svgDiagram = topic.toLowerCase().includes("photosynthesis") ? `
-    <svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
-      <rect x="10" y="40" width="300" height="90" rx="12" fill="#e8f5e9" stroke="#4caf50" stroke-width="2"/>
-      <text x="160" y="25" text-anchor="middle" font-size="14" fill="#2e7d32" font-weight="600">Leaf cross-section</text>
-      <circle cx="80" cy="85" r="22" fill="#fff9c4" stroke="#fbc02d" stroke-width="2"/>
-      <text x="80" y="90" text-anchor="middle" font-size="10" fill="#f57f17">Sunlight</text>
-      <rect x="140" y="70" width="80" height="50" rx="8" fill="#c8e6c9" stroke="#388e3c" stroke-width="2"/>
-      <text x="180" y="98" text-anchor="middle" font-size="10" fill="#1b5e20">Chloroplast</text>
-      <path d="M105 85 L140 90" stroke="#f57f17" stroke-width="2" marker-end="url(#arrow)"/>
-      <path d="M225 90 L260 90" stroke="#4caf50" stroke-width="2" marker-end="url(#arrow)"/>
-      <text x="270" y="95" font-size="10" fill="#1b5e20">O₂ + glucose</text>
-      <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#666"/></marker></defs>
-    </svg>` : topic.toLowerCase().includes("conflict") ? `
-    <svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto" role="img" aria-label="Four types of literary conflict">
-      <rect x="8" y="8" width="164" height="98" rx="12" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
-      <circle cx="57" cy="43" r="12" fill="#fbbf24"/><path d="M57 55v27m-16-14h32m-25 14-9 13m27-13 9 13" stroke="#7c2d12" stroke-width="4" stroke-linecap="round"/>
-      <circle cx="124" cy="43" r="12" fill="#fbbf24"/><path d="M124 55v27m-16-14h32m-25 14-9 13m27-13 9 13" stroke="#7c2d12" stroke-width="4" stroke-linecap="round"/>
-      <path d="M84 49l14 14-14 14" fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
-      <text x="90" y="97" text-anchor="middle" font-size="13" fill="#991b1b" font-weight="700">Person vs Person</text>
-      <rect x="188" y="8" width="164" height="98" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
-      <circle cx="270" cy="48" r="15" fill="#fbbf24"/><path d="M270 63v24m-16-12h32m-24 12-8 10m24-10 8 10" stroke="#78350f" stroke-width="4" stroke-linecap="round"/>
-      <path d="M245 31q25-19 50 0" fill="none" stroke="#f59e0b" stroke-width="3"/><text x="270" y="97" text-anchor="middle" font-size="13" fill="#92400e" font-weight="700">Person vs Self</text>
-      <rect x="8" y="124" width="164" height="98" rx="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
-      <circle cx="49" cy="158" r="10" fill="#93c5fd"/><circle cx="81" cy="158" r="10" fill="#93c5fd"/><circle cx="113" cy="158" r="10" fill="#93c5fd"/>
-      <path d="M49 170v24m32-24v24m32-24v24M137 149v42m-12-21h24" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round"/>
-      <text x="90" y="213" text-anchor="middle" font-size="13" fill="#1e40af" font-weight="700">Person vs Society</text>
-      <rect x="188" y="124" width="164" height="98" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
-      <path d="M207 167q13-20 26 0q13-20 26 0q13-20 26 0q13-20 26 0" fill="none" stroke="#0284c7" stroke-width="5"/>
-      <path d="M270 147v38m-13-18h26m-19 18-7 12m19-12 7 12" stroke="#166534" stroke-width="4" stroke-linecap="round"/>
-      <text x="270" y="213" text-anchor="middle" font-size="13" fill="#166534" font-weight="700">Person vs Nature</text>
-    </svg>` : `
-    <svg viewBox="0 0 320 120" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto">
-      <rect x="20" y="20" width="280" height="80" rx="16" fill="#e3f2fd" stroke="#2196f3" stroke-width="2"/>
-      <text x="160" y="65" text-anchor="middle" font-size="14" fill="#0d47a1" font-weight="600">${escapeHtml(topic)}</text>
-      <text x="160" y="85" text-anchor="middle" font-size="10" fill="#1565c0">Visual study guide</text>
+  const nodeCount = Math.max(keyPoints.length, 1);
+  const radius = 90;
+  const centerX = 200;
+  const centerY = 110;
+  const nodeRadius = 32;
+  const palette = [
+    { fill: "#fee2e2", stroke: "#ef4444", icon: "#dc2626" },
+    { fill: "#fef3c7", stroke: "#f59e0b", icon: "#d97706" },
+    { fill: "#dcfce7", stroke: "#22c55e", icon: "#16a34a" },
+    { fill: "#dbeafe", stroke: "#3b82f6", icon: "#2563eb" },
+  ];
+
+  const nodes = keyPoints.map((p, i) => {
+    const angle = (i * 2 * Math.PI) / nodeCount - Math.PI / 2;
+    const cx = centerX + radius * Math.cos(angle);
+    const cy = centerY + radius * Math.sin(angle);
+    const edgeX = centerX + (radius - nodeRadius) * Math.cos(angle);
+    const edgeY = centerY + (radius - nodeRadius) * Math.sin(angle);
+    const centerEdgeX = centerX + 42 * Math.cos(angle);
+    const centerEdgeY = centerY + 42 * Math.sin(angle);
+    const { fill, stroke, icon } = palette[i % palette.length];
+    const short = escapeHtml(p).slice(0, 22);
+    return `
+      <line x1="${centerEdgeX}" y1="${centerEdgeY}" x2="${edgeX}" y2="${edgeY}" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"/>
+      <circle cx="${cx}" cy="${cy}" r="${nodeRadius}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <circle cx="${cx}" cy="${cy - 10}" r="5" fill="${icon}"/>
+      <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="9" fill="#1f2937" font-weight="600">${short}</text>`;
+  }).join("");
+
+  const svgDiagram = `
+    <svg viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto" role="img" aria-label="Visual map for ${escapeHtml(topic)}">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+        </marker>
+      </defs>
+      <rect x="10" y="10" width="380" height="200" rx="16" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+      <circle cx="${centerX}" cy="${centerY}" r="44" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="3"/>
+      <text x="${centerX}" y="${centerY - 6}" text-anchor="middle" font-size="11" fill="#0369a1" font-weight="700">${escapeHtml(topic).slice(0, 18)}</text>
+      <text x="${centerX}" y="${centerY + 10}" text-anchor="middle" font-size="9" fill="#0ea5e9">visual map</text>
+      ${nodes}
     </svg>`;
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(topic)} Visual</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);padding:16px;color:#0f172a}
-  .card{max-width:760px;margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.08);overflow:hidden}
-  .header{background:linear-gradient(90deg,#0ea5e9,#2563eb);color:#fff;padding:18px 20px}
-  .header h1{font-size:1.25rem;font-weight:700}
-  .header span{font-size:0.75rem;opacity:0.9}
-  .body{padding:18px 20px}
-  .diagram-wrap{background:#f8fafc;border-radius:14px;padding:12px;margin-bottom:16px;border:1px solid #e2e8f0}
-  .points{display:grid;gap:10px;margin-bottom:16px}
-  .point{display:flex;align-items:flex-start;gap:10px;background:#f1f5f9;padding:10px 12px;border-radius:10px;border-left:4px solid #0ea5e9}
-  .point::before{content:"✓";font-weight:700;color:#0ea5e9;flex-shrink:0}
-  .point p{font-size:0.9rem;line-height:1.4}
-  .flip-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
-  .flip-card{perspective:800px;height:120px;cursor:pointer}
-  .flip-card-inner{position:relative;width:100%;height:100%;transition:transform 0.5s;transform-style:preserve-3d;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
-  .flip-card.flipped .flip-card-inner{transform:rotateY(180deg)}
-  .flip-card-front,.flip-card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;display:flex;align-items:center;justify-content:center;padding:10px;border-radius:12px;text-align:center;font-size:0.85rem}
-  .flip-card-front{background:#dbeafe;color:#1e40af;font-weight:600}
-  .flip-card-back{background:#1e40af;color:#fff;transform:rotateY(180deg)}
-  .tip{background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:12px;font-size:0.85rem;color:#92400e}
-  .tip strong{color:#78350f}
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="header">
-    <h1>${escapeHtml(topic)}</h1>
-    <span>Visual guide · ${escapeHtml(lang)}</span>
-  </div>
-  <div class="body">
-    <div class="diagram-wrap">${svgDiagram}</div>
-    <div class="points">
-      ${keyPoints.map((p) => `<div class="point"><p>${escapeHtml(p)}</p></div>`).join("")}
-    </div>
-    <div class="flip-cards">${cards}</div>
-    <div class="tip"><strong>Study tip:</strong> Click each card to flip it and test yourself. Say the answer out loud before checking.</div>
-  </div>
-</div>
-</body>
-</html>`;
+  const html = `<!DOCTYPE html>\r\n<html lang="en">\r\n<head>\r\n<meta charset="UTF-8">\r\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\r\n<title>${escapeHtml(topic)} Visual</title>\r\n<style>\r\n  *{box-sizing:border-box;margin:0;padding:0}\r\n  body{font-family:system-ui,-apple-system,BlinkMacSystemFont,\\"Segoe UI\\",Roboto,sans-serif;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);padding:16px;color:#0f172a}\r\n  .card{max-width:760px;margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.08);overflow:hidden}\r\n  .header{background:linear-gradient(90deg,#0ea5e9,#2563eb);color:#fff;padding:18px 20px}\r\n  .header h1{font-size:1.25rem;font-weight:700}\r\n  .header span{font-size:0.75rem;opacity:0.9}\r\n  .body{padding:18px 20px}\r\n  .diagram-wrap{background:#f8fafc;border-radius:14px;padding:12px;margin-bottom:16px;border:1px solid #e2e8f0}\r\n  .points{display:grid;gap:10px;margin-bottom:16px}\r\n  .point{display:flex;align-items:flex-start;gap:10px;background:#f1f5f9;padding:10px 12px;border-radius:10px;border-left:4px solid #0ea5e9}\r\n  .point-icon{width:18px;height:18px;flex-shrink:0;color:#0ea5e9}\r\n  .point p{font-size:0.9rem;line-height:1.4}\r\n  .flip-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}\r\n  .flip-card{perspective:800px;height:120px;cursor:pointer}\r\n  .flip-card-inner{position:relative;width:100%;height:100%;transition:transform 0.5s;transform-style:preserve-3d;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}\r\n  .flip-card.flipped .flip-card-inner{transform:rotateY(180deg)}\r\n  .flip-card-front,.flip-card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;display:flex;align-items:center;justify-content:center;padding:10px;border-radius:12px;text-align:center;font-size:0.85rem}\r\n  .flip-card-front{background:#dbeafe;color:#1e40af;font-weight:600}\r\n  .flip-card-back{background:#1e40af;color:#fff;transform:rotateY(180deg)}\r\n  .tip{background:#fef3c7;border:1px solid #fcd34d;border-radius:12px;padding:12px;font-size:0.85rem;color:#92400e}\r\n  .tip strong{color:#78350f}\r\n</style>\r\n</head>\r\n<body>\r\n<div class="card">\r\n  <div class="header">\r\n    <h1>${escapeHtml(topic)}</h1>\r\n    <span>Visual guide · ${escapeHtml(lang)}</span>\r\n  </div>\r\n  <div class="body">\r\n    <div class="diagram-wrap">${svgDiagram}</div>\r\n    <div class="points">\r\n      ${keyPoints.map((p) => `<div class="point"><svg class="point-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><p>${escapeHtml(p)}</p></div>`).join("")}\r\n    </div>\r\n    <div class="flip-cards">${cards}</div>\r\n    <div class="tip"><strong>Study tip:</strong> Click each card to flip it and test yourself. Say the answer out loud before checking.</div>\r\n  </div>\r\n</div>\r\n</body>\r\n</html>`;
 
   return { title: `${topic} Visual`, html };
 }
@@ -783,31 +797,39 @@ export async function htmlVisualAgent(
   classification: Classification,
   model: ModelPreference = "auto"
 ): Promise<{ title: string; html: string } | null> {
-  // Fast path: build a reliable visual instantly without LLM so the demo never times out.
-  const fast = buildFastHtmlVisual(topic, studyPack, classification);
-  if (fast.html.length > 200) return fast;
+  const userPrompt = buildVisualUserPrompt(topic, studyPack, classification);
 
-  // Fallback LLM path if study pack is unusable.
-  const prompt = `Create a short HTML visual for ${topic}. Return JSON with title and html.`;
-  const content = await callFireworks(
-    [
-      { role: "system", content: "Return only valid JSON with title and html." },
-      { role: "user", content: prompt },
-    ],
-    true,
-    1500,
-    model
-  );
-  const parsed = extractJson<{ title: string; html: string }>(content);
-  if (parsed?.html && parsed.html.trim().length > 50) {
-    // Sanitize: ensure it's a complete document and strip potentially harmful tags.
-    let html = parsed.html.trim();
-    if (!html.toLowerCase().startsWith("<!doctype")) {
-      html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${parsed.title}</title>\n<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:16px;}</style>\n</head>\n<body>\n${html}\n</body>\n</html>`;
+  try {
+    const llmPromise = callFireworks(
+      [
+        { role: "system", content: VISUAL_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      true,
+      2000,
+      model
+    );
+
+    const timeoutPromise = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error("Visual generation timed out")), VISUAL_LLM_TIMEOUT_MS)
+    );
+
+    const content = await Promise.race([llmPromise, timeoutPromise]);
+    const parsed = extractJson<{ title: string; html: string }>(content);
+
+    if (parsed?.html && parsed.html.trim().length > 200) {
+      let html = parsed.html.trim();
+      if (!html.toLowerCase().startsWith("<!doctype")) {
+        html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${escapeHtml(parsed.title || topic)}</title>\n<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,\\"Segoe UI\\",Roboto,sans-serif;margin:0;padding:16px;background:#f8fafc;}</style>\n</head>\n<body>\n${html}\n</body>\n</html>`;
+      }
+      return { title: parsed.title || `${topic} Visual`, html };
     }
-    return { title: parsed.title, html };
+  } catch (err) {
+    console.warn("AI visual generation failed or timed out, falling back to template", err);
   }
-  return null;
+
+  // Fast fallback: reliable, instant visual with icons, lines, and shapes.
+  return buildFastHtmlVisual(topic, studyPack, classification);
 }
 
 export async function visualDesignerAgent(

@@ -26,5 +26,12 @@ describe("visualDesignerAgent", () => {
     );
 
     expect(visual).toMatchObject({ type: "html_visual", topicId: "topic-1" });
+
+    const htmlVisual = visual as { html: string };
+    expect(htmlVisual.html).toContain("<!DOCTYPE html>");
+    expect(htmlVisual.html).toContain("<svg");
+    expect(htmlVisual.html).toContain("<line");
+    expect(htmlVisual.html).toContain("<circle");
+    expect(htmlVisual.html).toContain("point-icon");
   });
 });
