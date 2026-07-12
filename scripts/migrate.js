@@ -31,11 +31,19 @@ async function migrate() {
   const client = new Client({ connectionString });
   await client.connect();
 
-  const sqlPath = path.join(__dirname, '../supabase/migrations/001_initial.sql');
-  const sql = fs.readFileSync(sqlPath, 'utf8');
+  const migrationsDir = path.join(__dirname, '../supabase/migrations');
+  const files = fs.readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
 
-  await client.query(sql);
-  console.log('Migration applied successfully.');
+  for (const file of files) {
+    const sqlPath = path.join(migrationsDir, file);
+    const sql = fs.readFileSync(sqlPath, 'utf8');
+    await client.query(sql);
+    console.log(`Applied migration: ${file}`);
+  }
+
+  console.log('All migrations applied successfully.');
 
   await client.end();
 }
