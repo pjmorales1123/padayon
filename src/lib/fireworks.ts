@@ -81,21 +81,42 @@ async function callModel(model: string, messages: ChatMessage[], jsonMode = fals
 }
 
 function resolveGemmaConfig(preference: "gemma-3" | "gemma-4") {
-  if (preference === "gemma-4") {
+  const isGemma4 = preference === "gemma-4";
+  const deployment = isGemma4 ? GEMMA_4_DEPLOYMENT : GEMMA_3_DEPLOYMENT;
+  const publicModel = isGemma4 ? GEMMA_4_MODEL_NAME : GEMMA_3_MODEL_NAME;
+  const explicitEndpoint = isGemma4 ? GEMMA_4_ENDPOINT : GEMMA_3_ENDPOINT;
+
+  // If a deployment ID like `accounts/<account>/deployments/<id>` is provided,
+  // derive the deployment-specific endpoint. Fireworks deployments do NOT work
+  // through the generic `/chat/completions` endpoint with that string as model.
+  const deploymentMatch = deployment?.match(/^accounts\/([^/]+)\/deployments\/([^/]+)$/);
+  if (deploymentMatch) {
+    const [, account, deploymentId] = deploymentMatch;
     return {
-      endpoint: GEMMA_4_ENDPOINT || "https://api.fireworks.ai/inference/v1/chat/completions",
-      modelName: GEMMA_4_DEPLOYMENT || GEMMA_4_MODEL_NAME,
+      endpoint: explicitEndpoint || `https://api.fireworks.ai/inference/v1/accounts/${account}/deployments/${deploymentId}/chat/completions`,
+      modelName: deployment,
+      fallbackModel: publicModel,
     };
   }
+
   return {
-    endpoint: GEMMA_3_ENDPOINT || "https://api.fireworks.ai/inference/v1/chat/completions",
-    modelName: GEMMA_3_DEPLOYMENT || GEMMA_3_MODEL_NAME,
+    endpoint: explicitEndpoint || "https://api.fireworks.ai/inference/v1/chat/completions",
+    modelName: deployment || publicModel,
   };
 }
 
 async function callGemma(preference: "gemma-3" | "gemma-4", messages: ChatMessage[], jsonMode = false, maxTokens = 1500) {
-  const { endpoint, modelName } = resolveGemmaConfig(preference);
-  return await callModel(modelName, messages, jsonMode, maxTokens, endpoint, GEMMA_API_KEY);
+  const { endpoint, modelName, fallbackModel } = resolveGemmaConfig(preference);
+  try {
+    return await callModel(modelName, messages, jsonMode, maxTokens, endpoint, GEMMA_API_KEY);
+  } catch (err) {
+    // If the deployment endpoint is broken/missing, fall back to the public model.
+    if (fallbackModel) {
+      console.warn(`Gemma deployment ${modelName} failed, falling back to public model ${fallbackModel}`, err);
+      return await callModel(fallbackModel, messages, jsonMode, maxTokens, "https://api.fireworks.ai/inference/v1/chat/completions", GEMMA_API_KEY);
+    }
+    throw err;
+  }
 }
 
 export async function callFireworks(

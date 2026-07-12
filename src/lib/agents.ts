@@ -156,10 +156,15 @@ function keywordClassification(message: string): Classification {
     return { subject: "Math", subcategory: "Algebra", topic, intent, language_detected: language, confidence: 0.9 };
   }
   if (contains(englishKeywords)) {
-    let topic = "English topic";
-    if (lower.includes("irony")) topic = "Irony";
-    else if (lower.includes("characterization")) topic = "Characterization";
-    else if (lower.includes("point of view")) topic = "Point of View";
+    const topics: string[] = [];
+    if (lower.includes("point of view")) topics.push("Point of View");
+    if (lower.includes("irony")) topics.push("Irony");
+    if (lower.includes("characterization")) topics.push("Characterization");
+    if (lower.includes("metaphor") || lower.includes("simile") || lower.includes("personification") || lower.includes("hyperbole") || lower.includes("figurative")) topics.push("Figures of Speech");
+    if (lower.includes("theme")) topics.push("Theme");
+    if (lower.includes("plot")) topics.push("Plot");
+    if (lower.includes("setting")) topics.push("Setting");
+    const topic = topics.length > 1 ? topics.join(" and ") : (topics[0] || "English topic");
     return { subject: "English", subcategory: "Literature", topic, intent, language_detected: language, confidence: 0.88 };
   }
   if (contains(filipinoKeywords)) {
@@ -195,7 +200,7 @@ export async function classifierAgent(
 Analyze the student input and return ONLY valid JSON with exactly these fields:
 - subject (Science, Math, English, Filipino, ICT, Social Studies, MAPEH, or Unknown)
 - subcategory
-- topic (a short, specific topic title)
+- topic (a short, specific topic title; if the notes cover multiple distinct concepts like "point of view" AND "dramatic irony", combine them into one topic title such as "Point of View and Dramatic Irony")
 - intent (create_study_pack, teach_topic, make_flashcards, make_reviewer, make_quiz, make_summary, make_story, make_visual, retrieve_material, continue_learning, research_topics, unknown)
 - language_detected (English, Filipino, Cebuano, Cebuano-English mix, Filipino-English mix, Other)
 - confidence (number 0.0-1.0)
@@ -207,6 +212,7 @@ Intent rules:
 - Use "make_summary" when the student asks for a summary, recap, or overview of the lesson (e.g., "give me a summary", "recap photosynthesis", "lesson summary").
 - Use "retrieve_material" ONLY when the student explicitly asks to see existing saved materials (e.g., "show my flashcards", "where is my quiz", "my summary"). Do NOT use it for general questions like "look at" or "tell me about".
 - Use "continue_learning" when the student clearly returns to a previous topic (e.g., "continue", "go back to").
+- If the student refers to "these notes", "the notes I sent", "this", or "it" and a recent message contains uploaded notes, keep the same topic as the notes and use intent "teach_topic" or "create_study_pack" depending on whether they are asking a question or adding more notes.
 - Use "research_topics" when the student missed a lesson, is unsure what topic to study, or asks what was discussed (e.g., "I didn't listen earlier, what did we talk about?", "wala ko nakadungog sa lesson ganina", "show me related topics", "what topics are in this subject?").
 - Use "unknown" only if you cannot determine the subject or topic at all.
 
@@ -474,7 +480,7 @@ How to adapt:
 - Keep it short and student-friendly. Use examples familiar to Filipino students when possible.
 - Academic term: If you respond partly in Filipino or Cebuano, you MUST include the English academic term **${topic}** at least once so the student learns the correct vocabulary.
 - Ask one guiding question at the end.
-- Treat the current student message and current Topic as the source of truth. Use recent conversation only when the student clearly asks to continue or retrieve something; do not say "since you asked about..." or combine a previous topic with the current one unless the student explicitly makes that connection.
+- Treat the current student message and current Topic as the source of truth. Use recent conversation when the student refers to "these notes", "the notes", "this", "it", "them", or asks a clarification about something shared earlier. Otherwise, do not say "since you asked about..." or combine a previous topic with the current one unless the student explicitly makes that connection.
 
 Learner profile: ${JSON.stringify(profile)}
 Topic: ${topic}

@@ -24,7 +24,7 @@ import {
   shouldPersistTopicForTurn,
 } from "@/lib/agent-routing";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 interface MaterialContent {
   text?: string;
@@ -223,8 +223,21 @@ function normalizeClassification(
   }
 
   // Canonicalize topic titles to avoid duplicates like "Photosynthesis" vs "Photosynthesis inputs and outputs".
+  // If the message covers multiple distinct concepts, keep them combined rather than collapsing to one.
   const topicLower = topic.toLowerCase();
-  if (topicLower.includes("photosynthesis")) topic = "Photosynthesis";
+  const messageLower = message.toLowerCase();
+  const englishTopics: string[] = [];
+  if (messageLower.includes("point of view")) englishTopics.push("Point of View");
+  if (messageLower.includes("irony")) englishTopics.push("Irony");
+  if (messageLower.includes("characterization")) englishTopics.push("Characterization");
+  if (messageLower.includes("metaphor") || messageLower.includes("simile") || messageLower.includes("personification") || messageLower.includes("hyperbole") || messageLower.includes("figurative")) englishTopics.push("Figures of Speech");
+  if (messageLower.includes("theme")) englishTopics.push("Theme");
+  if (messageLower.includes("plot")) englishTopics.push("Plot");
+  if (messageLower.includes("setting")) englishTopics.push("Setting");
+
+  if (englishTopics.length > 1) {
+    topic = englishTopics.join(" and ");
+  } else if (topicLower.includes("photosynthesis")) topic = "Photosynthesis";
   else if (topicLower.includes("cellular respiration")) topic = "Cellular Respiration";
   else if (topicLower.includes("ecosystem")) topic = "Ecosystem";
   else if (topicLower.includes("quadratic formula")) topic = "Quadratic Formula";
