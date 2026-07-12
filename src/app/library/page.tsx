@@ -10,6 +10,7 @@ const DEMO_USER_ID = "demo-user-id";
 interface Material {
   id: string;
   title: string;
+  type: string;
 }
 
 interface Topic {
@@ -17,6 +18,7 @@ interface Topic {
   title: string;
   subcategory: string;
   materials: Material[];
+  last_studied_at: string;
   progress?: {
     confidence?: number;
     status?: string;
@@ -297,6 +299,14 @@ function LibraryInner() {
                           : "bg-blue-50 text-blue-700 border-blue-200";
                     const barColor =
                       status === "mastered" ? "bg-emerald-500" : status === "developing" ? "bg-amber-500" : "bg-blue-500";
+                    const imageCount = topic.materials?.filter((m) => m.type === "image_notes").length || 0;
+                    const pdfCount = topic.materials?.filter((m) => m.type === "pdf_notes").length || 0;
+                    const hasReviewer = topic.materials?.some((m) => m.type === "reviewer") || false;
+                    const hasFlashcards = topic.materials?.some((m) => m.type === "flashcards") || false;
+                    const hasQuiz = topic.materials?.some((m) => m.type === "quiz") || false;
+                    const updated = topic.last_studied_at
+                      ? new Date(topic.last_studied_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+                      : "";
                     return (
                       <div
                         key={topic.id}
@@ -317,6 +327,14 @@ function LibraryInner() {
                           {topic.subcategory && (
                             <p className="text-xs text-slate-500 truncate">{topic.subcategory}</p>
                           )}
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-600">
+                            {imageCount > 0 && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5">📷 {imageCount} image{imageCount > 1 ? "s" : ""}</span>}
+                            {pdfCount > 0 && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5">📄 {pdfCount} PDF{pdfCount > 1 ? "s" : ""}</span>}
+                            {hasReviewer && <span className="inline-flex items-center gap-1 rounded-md bg-green-50 text-green-700 px-2 py-0.5">✓ Reviewer</span>}
+                            {hasFlashcards && <span className="inline-flex items-center gap-1 rounded-md bg-green-50 text-green-700 px-2 py-0.5">✓ Flashcards</span>}
+                            {hasQuiz && <span className="inline-flex items-center gap-1 rounded-md bg-green-50 text-green-700 px-2 py-0.5">✓ Quiz</span>}
+                            {updated && <span className="text-slate-400">Updated {updated}</span>}
+                          </div>
                           <div className="mt-2 flex items-center gap-3">
                             <div className="h-1.5 flex-1 max-w-[10rem] rounded-full bg-slate-200 overflow-hidden">
                               <div

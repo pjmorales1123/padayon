@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
         )
       `)
       .eq("user_id", userId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .order("last_studied_at", { referencedTable: "topics", ascending: false });
 
     if (error) throw error;
 

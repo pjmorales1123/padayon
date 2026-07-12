@@ -14,6 +14,8 @@ interface Material {
   title: string;
   content: {
     text?: string;
+    image_url?: string;
+    preview_image_url?: string;
     flashcards?: Array<{ front: string; back: string }>;
     quiz?: Array<{ question: string; choices: string[]; answer: string; explanation?: string }>;
   };
@@ -42,6 +44,7 @@ interface Topic {
 
 const tabs = [
   "Overview",
+  "Uploads",
   "Original Notes",
   "Clean Notes",
   "Reviewer",
@@ -317,6 +320,36 @@ function TopicPageInner() {
             </p>
           </div>
         );
+      case "Uploads": {
+        const uploads = topic?.materials?.filter((m) => m.type === "image_notes" || m.type === "pdf_notes") || [];
+        if (uploads.length === 0) return <p className="text-slate-400">No uploaded images or PDFs yet.</p>;
+        return (
+          <div className="grid gap-4">
+            {uploads.map((m) => {
+              const src = (m.content?.image_url || m.content?.preview_image_url) as string | undefined;
+              const text = (m.content?.text || "") as string;
+              return (
+                <div key={m.id} className="rounded-xl bg-white border border-slate-200 p-4">
+                  <div className="font-semibold text-slate-800 mb-2">{m.title}</div>
+                  {src && (
+                    <img
+                      src={src}
+                      alt={m.title}
+                      className="max-h-64 rounded-lg border border-slate-200 mb-3 object-contain"
+                    />
+                  )}
+                  {text && (
+                    <div className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3 border border-slate-100">
+                      <strong>Extracted text:</strong>
+                      <div className="whitespace-pre-wrap mt-1">{text.length > 400 ? text.slice(0, 400) + "..." : text}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
       case "Original Notes": {
         const m = getMaterial("original_notes");
         return (
