@@ -55,7 +55,12 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
     const interval = setInterval(() => {
       setRetryCount((c) => c + 1);
     }, 8000);
-    return () => clearInterval(interval);
+    const refresh = () => setRetryCount((c) => c + 1);
+    window.addEventListener("padayon:learner-summary-refresh", refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("padayon:learner-summary-refresh", refresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -169,6 +174,12 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
           text = "Placed one picture on your library and saved the contents.";
         } else if (m.type === "pdf_notes") {
           text = "Placed one PDF on your library and saved the contents.";
+        } else if (m.type === "html_visual") {
+          text = `Created a visual guide for ${folder}`;
+        } else if (m.type === "quiz") {
+          text = `Saved a quiz for ${folder}`;
+        } else if (m.type === "flashcards") {
+          text = `Saved flashcards for ${folder}`;
         } else if (m.type === "clean_notes") {
           text = `Saved transcribed notes on ${folder}`;
         } else if (m.type === "original_notes") {
@@ -179,6 +190,14 @@ export default function LearnerSummary({ userId, refreshKey }: LearnerSummaryPro
           text,
         });
       });
+      const quizAttempts = typeof t.progress?.quiz_attempts === "number" ? t.progress.quiz_attempts : 0;
+      const lastScore = typeof t.progress?.last_score === "number" ? t.progress.last_score : null;
+      if (quizAttempts > 0 && lastScore !== null) {
+        events.push({
+          ts: String(t.progress?.updated_at || t.last_studied_at || new Date().toISOString()),
+          text: `Quiz updated confidence for ${t.subjectName} -> ${t.subcategory || "General"} -> ${t.title}: ${lastScore}% last score, ${quizAttempts} attempt${quizAttempts === 1 ? "" : "s"}`,
+        });
+      }
       return events;
     })
     .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())

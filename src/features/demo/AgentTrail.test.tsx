@@ -63,7 +63,7 @@ describe("AgentTrail", () => {
     render(<AgentTrail requestId="req-model" />);
 
     await waitFor(() => {
-      expect(screen.getByText("Completed this turn")).toBeTruthy();
+      expect(screen.getByText("Main agents this turn")).toBeTruthy();
       expect(screen.getByText("Gemma")).toBeTruthy();
       expect(screen.queryByText("Currently working")).toBeNull();
     });

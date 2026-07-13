@@ -140,6 +140,7 @@ function ModelBadge({ label }: { label: string }) {
 }
 
 const TOTAL_STEP_UNITS = STEP_ORDER.length - 1;
+const IMPORTANT_STEPS = new Set(["classify", "curriculum", "retrieve", "create_materials", "teach", "memory", "error"]);
 
 // Stop polling once a run reaches a terminal state so the monitor does not
 // keep spinning after the reply is delivered.
@@ -196,7 +197,6 @@ export default function AgentTrail({ requestId, userId }: AgentTrailProps) {
   const [eventsById, setEventsById] = useState<Record<string, AgentEvent[]>>({});
   const [failuresById, setFailuresById] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const events = useMemo(() => (requestId ? eventsById[requestId] || [] : []), [eventsById, requestId]);
@@ -254,10 +254,6 @@ export default function AgentTrail({ requestId, userId }: AgentTrailProps) {
     };
   }, [requestId]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView?.({ behavior: "smooth" });
-  }, [events]);
-
   if (!requestId) {
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 p-6 text-center text-slate-500">
@@ -278,8 +274,9 @@ export default function AgentTrail({ requestId, userId }: AgentTrailProps) {
 
   const runningEvent = [...displayEvents].reverse().find((e) => e.status === "running");
   const finishEvent = displayEvents.find((e) => e.step === "finish" && e.status === "done");
+  const visibleEvents = displayEvents.filter((event) => IMPORTANT_STEPS.has(event.step) || Boolean(getModelBadge(event)));
   const completedEvents = displayEvents.filter(
-    (event) => event.status !== "running" && event.step !== "start" && event.step !== "finish",
+    (event) => visibleEvents.includes(event) && event.status !== "running",
   );
   const createdMaterials = (finishEvent?.detail?.materials_created as string[] | undefined) || [];
   const showRetry = failures >= 3;
@@ -338,10 +335,10 @@ export default function AgentTrail({ requestId, userId }: AgentTrailProps) {
         )}
 
         {showLoading && <SkeletonStep count={2} />}
-        {!showLoading && !finished && <WorkingBubble event={runningEvent} />}
+        {!showLoading && !finished && <WorkingBubble event={runningEvent && (IMPORTANT_STEPS.has(runningEvent.step) || getModelBadge(runningEvent)) ? runningEvent : undefined} />}
 
         {completedEvents.length > 0 && (
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Completed this turn</p>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Main agents this turn</p>
         )}
         <div className="relative space-y-0">
           {completedEvents.length > 0 && <div className="absolute bottom-3 left-[19px] top-3 w-px bg-slate-800" />}
@@ -403,7 +400,6 @@ export default function AgentTrail({ requestId, userId }: AgentTrailProps) {
             )}
           </div>
         )}
-        <div ref={scrollRef} />
       </div>
     </div>
   );

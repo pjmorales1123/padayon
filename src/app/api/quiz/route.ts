@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     const { error: progressErr } = await supabaseAdmin!
       .from("topics")
-      .update({ progress: newProgress })
+      .update({ progress: newProgress, last_studied_at: new Date().toISOString() })
       .eq("id", topicId);
 
     if (progressErr) throw progressErr;
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       .from("learner_profiles")
       .select("*")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     const memoryUpdate = await memoryAgent(
       `Quiz submitted for ${topic?.title || "topic"}. Score: ${score}/${total} (${percentage}%).`,
@@ -89,19 +89,31 @@ export async function POST(req: NextRequest) {
     const newStrength = (memoryUpdate.strength_update || "").trim();
     const newWeakness = (memoryUpdate.weakness_update || "").trim();
 
+    const profileUpdate = {
+      learning_style: {
+        ...(existingProfile?.learning_style || {}),
+        ...Object.fromEntries(lsEntries),
+      },
+      strengths: [...new Set([...(existingProfile?.strengths || []), ...(newStrength && !/no change|none|n\/a/i.test(newStrength) ? [newStrength] : [])])],
+      weaknesses: [...new Set([...(existingProfile?.weaknesses || []), ...(newWeakness && !/no change|none|n\/a/i.test(newWeakness) ? [newWeakness] : [])])],
+      updated_at: new Date().toISOString(),
+    };
+
     if (existingProfile) {
       await supabaseAdmin!
         .from("learner_profiles")
-        .update({
-          learning_style: {
-            ...existingProfile.learning_style,
-            ...Object.fromEntries(lsEntries),
-          },
-          strengths: [...new Set([...(existingProfile.strengths || []), ...(newStrength && !/no change|none|n\/a/i.test(newStrength) ? [newStrength] : [])])],
-          weaknesses: [...new Set([...(existingProfile.weaknesses || []), ...(newWeakness && !/no change|none|n\/a/i.test(newWeakness) ? [newWeakness] : [])])],
-          updated_at: new Date().toISOString(),
-        })
+        .update(profileUpdate)
         .eq("id", existingProfile.id);
+    } else {
+      await supabaseAdmin!
+        .from("learner_profiles")
+        .insert({
+          user_id: userId,
+          language_confidence: {},
+          study_habits: {},
+          student_notes: [],
+          ...profileUpdate,
+        });
     }
 
     return NextResponse.json({

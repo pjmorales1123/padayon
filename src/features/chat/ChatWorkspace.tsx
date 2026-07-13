@@ -218,6 +218,7 @@ export default function ChatWorkspace({
     imageUrlOverride?: string,
     skipUserMessage = false,
     attachmentType?: "image" | "pdf",
+    displayMessage?: string,
   ) => {
     const userMsg = (textOverride ?? inputRef.current).trim();
     if (!userMsg || sendingRef.current) return;
@@ -255,11 +256,12 @@ export default function ChatWorkspace({
       }
     }, 500);
 
+    let completed = false;
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, message: userMsg, requestId: reqId, imageUrl: imageUrlOverride, attachmentType, model, topicId: currentTopicId }),
+        body: JSON.stringify({ userId, message: userMsg, displayMessage, requestId: reqId, imageUrl: imageUrlOverride, attachmentType, model, topicId: currentTopicId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -282,7 +284,7 @@ export default function ChatWorkspace({
           interactive: data.interactive,
         },
       ]);
-      setRequestState("idle");
+      completed = true;
     } catch (err) {
       setInput(userMsg);
       setLastFailedPrompt(userMsg);
@@ -295,6 +297,11 @@ export default function ChatWorkspace({
       clearInterval(interval);
       setStepLabel("Thinking...");
       sendingRef.current = false;
+      if (completed) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        setRequestState("idle");
+      }
+      window.dispatchEvent(new CustomEvent("padayon:learner-summary-refresh"));
       onRequestComplete?.(reqId);
     }
   }, [userId, model, currentTopicId, onRequestStart, onRequestComplete]);
@@ -433,7 +440,7 @@ export default function ChatWorkspace({
         { role: "user", content: importLabel, imageUrl: previewUrl },
       ]);
 
-      send(combinedText, previewUrl, true, pdfFiles.length > 0 ? "pdf" : "image");
+      await send(combinedText, previewUrl, true, pdfFiles.length > 0 ? "pdf" : "image", importLabel);
     } catch (err) {
       console.error("Smart import failed", err);
       showAssistantError("Import failed. Please try again with fewer or clearer pages.");
@@ -459,7 +466,7 @@ export default function ChatWorkspace({
         ...prev,
         { role: "user", content: "[Uploaded image]", imageUrl: dataUrl },
       ]);
-      send(text, dataUrl, true, "image");
+      await send(text, dataUrl, true, "image", "[Uploaded image]");
     } catch (err) {
       console.error("Image upload failed", err);
       showAssistantError("Could not read the image. Try typing the notes instead.");

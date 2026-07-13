@@ -224,10 +224,23 @@ function buildStudyPackConfirmation(
 function buildUploadConfirmation(
   attachmentType: string,
   classification: { subject: string; subcategory: string; topic: string },
-  topicId: string,
-  withAlignmentQuestion = true
+  topicId: string
 ): string {
   const fileLabel = attachmentType === "pdf" ? "PDF" : "image";
+  return [
+    `Got your ${fileLabel} notes.`,
+    "",
+    "I saved them in your Library under:",
+    `**${classification.subject} -> ${classification.subcategory} -> ${classification.topic}**`,
+    "",
+    `Saved: uploaded ${fileLabel} + extracted text`,
+    "",
+    "What would you like to do with it next: summarize it, make flashcards, create a quiz, or clean up the notes?",
+    "",
+    `Open it in your Library: /topic/${topicId}`,
+  ].join("\n");
+
+  /*
   const lines = [
     `Got your ${fileLabel} notes.`,
     "",
@@ -249,6 +262,7 @@ function buildUploadConfirmation(
     lines.push("[Yes] [Partly] [No] [Add more notes]");
   }
   return lines.join("\n");
+  */
 }
 
 function detectTeacherAlignmentResponse(message: string, history: ChatMessage[]): "yes" | "partly" | "no" | null {
@@ -566,7 +580,7 @@ async function applyMemoryUpdate(
   userId: string,
   message: string,
   quizResult: { correct: boolean; topic: string; question?: string } | undefined,
-  classification: { topic: string; language_detected: string },
+  classification: { topic: string; language_detected: string; intent?: string },
   existingProfile: ProfileRow | null,
   model: import("@/lib/fireworks").ModelPreference = "auto"
 ) {
@@ -595,6 +609,9 @@ async function applyMemoryUpdate(
       .map((s) => normalizeStyle(s))
       .filter((s) => s.length > 0 && !/no change|none|n\/a/i.test(s))
       .map((s) => [s, true]);
+    if (classification.intent === "make_visual" || isVisualLearningRequest(message)) {
+      lsEntries.push(["visuals", true], ["visual examples", true]);
+    }
 
     const newStrength = (memoryUpdate.strength_update || "").trim();
     const newWeakness = (memoryUpdate.weakness_update || "").trim();
@@ -662,7 +679,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, message, quizResult, requestId: clientRequestId, imageUrl, attachmentType, model, topicId: providedTopicId } = body;
+    const { userId, message, displayMessage, quizResult, requestId: clientRequestId, imageUrl, attachmentType, model, topicId: providedTopicId } = body;
     const preferredModel =
       model === "gemma-3" || model === "gemma-4" || model === "fallback"
         ? model
@@ -671,6 +688,10 @@ export async function POST(req: NextRequest) {
     if (!userId || !message) {
       return NextResponse.json({ error: "Missing userId or message", model_runtime: modelRuntime }, { status: 400 });
     }
+    const savedUserMessage =
+      imageUrl && typeof displayMessage === "string" && displayMessage.trim()
+        ? displayMessage.trim()
+        : message;
 
     requestId = clientRequestId || `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startRun(requestId, userId, message);
@@ -836,7 +857,7 @@ export async function POST(req: NextRequest) {
         user_id: userId,
         topic_id: null,
         role: "user",
-        content: message,
+        content: savedUserMessage,
       });
 
       logStep(requestId, "profile", "Loading full learner profile", "running");
@@ -992,7 +1013,7 @@ export async function POST(req: NextRequest) {
       user_id: userId,
       topic_id: topic.id,
       role: "user",
-      content: message,
+      content: savedUserMessage,
     });
 
     // 7. Retrieve existing materials if retrieval or visual intent
@@ -1254,66 +1275,6 @@ export async function POST(req: NextRequest) {
         materials_created.push(uploadMaterialType);
       }
 
-      // Auto-create a full study pack from uploaded notes if one doesn't exist yet.
-      const { data: existingCleanNotes } = await supabaseAdmin!
-        .from("materials")
-        .select("id")
-        .eq("topic_id", topic.id)
-        .eq("type", "clean_notes")
-        .maybeSingle();
-
-      if (!existingCleanNotes) {
-        logStep(requestId, "create_materials", "Auto-creating study pack from upload", "running");
-        if (!profileRow) {
-          const { data: p } = await supabaseAdmin!.from("learner_profiles").select("*").eq("user_id", userId).single();
-          profileRow = (p as ProfileRow | null) || null;
-        }
-        studyPack = await materialCreatorAgent(message, classification.topic, curriculum, profileRow || {}, preferredModel);
-
-        const autoMaterialInserts = [
-          { topic_id: topic.id, type: "original_notes", title: "Original Notes", content: { text: message } },
-          { topic_id: topic.id, type: "clean_notes", title: "Clean Notes", content: { text: studyPack.clean_notes } },
-          { topic_id: topic.id, type: "reviewer", title: "Reviewer", content: { text: studyPack.reviewer } },
-          { topic_id: topic.id, type: "flashcards", title: "Flashcards", content: { flashcards: studyPack.flashcards } },
-          { topic_id: topic.id, type: "quiz", title: "Quiz", content: { quiz: studyPack.quiz } },
-          { topic_id: topic.id, type: "summary", title: "Summary", content: { text: studyPack.summary } },
-          ...(studyPack.story ? [{ topic_id: topic.id, type: "story", title: "Story", content: { text: studyPack.story } }] : []),
-        ];
-
-        for (const m of autoMaterialInserts) {
-          const { data: inserted, error } = await supabaseAdmin!
-            .from("materials")
-            .insert(m as unknown as Record<string, unknown>)
-            .select("id, type")
-            .single();
-          if (error) {
-            console.error("Upload auto-create material insert error:", error);
-          } else if (inserted) {
-            savedMaterials.push({ type: inserted.type, id: inserted.id });
-          }
-        }
-
-        const coreConcepts = studyPack.lesson_scope?.core_concepts?.length
-          ? studyPack.lesson_scope.core_concepts
-          : curriculum.competency
-            ? [curriculum.competency]
-            : [`Understand ${classification.topic}`];
-        const masteryMap: Record<string, string> = {};
-        for (const concept of coreConcepts) masteryMap[concept] = "started";
-        await supabaseAdmin!
-          .from("topics")
-          .update({
-            lesson_scope: { confirmed_by_student: false, core_concepts: coreConcepts },
-            outside_scope: studyPack.outside_scope || { advanced_concepts: [] },
-            mastery_map: masteryMap,
-            teacher_confirmed: false,
-          })
-          .eq("id", topic.id);
-
-        materials_created.push("original_notes", "clean_notes", "reviewer", "flashcards", "quiz", "summary", ...(studyPack.story ? ["story"] : []));
-        logStep(requestId, "create_materials", "Study pack auto-created from upload", "done");
-      }
-
       reply = buildUploadConfirmation(attachmentType, classification, topic.id);
     }
 
@@ -1372,7 +1333,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Student-helpfulness review (demo "thinking mode"): polish the final reply before saving.
-    if (reply && classification.intent !== "create_study_pack") {
+    if (reply && classification.intent !== "create_study_pack" && !imageUrl) {
       reply = await studentReplyReview(
         reply,
         message,
@@ -1417,7 +1378,7 @@ export async function POST(req: NextRequest) {
       await applyMemoryUpdate(requestId, userId, message, quizResult, classification, profileRow, preferredModel);
     }
 
-    logStep(requestId, "finish", "Response complete", "done", { materials_created });
+    logStep(requestId, "finish", "Response complete", "done", { materials_created, runtime: modelRuntime });
 
     return NextResponse.json({
       requestId,

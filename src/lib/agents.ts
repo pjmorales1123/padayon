@@ -669,8 +669,10 @@ Current profile: ${JSON.stringify(profile)}`;
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VISUAL_LLM_TIMEOUT_MS = 20000;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VISUAL_SYSTEM_PROMPT = `You are an expert visual designer and front-end developer. Your job is to turn a lesson topic into a single HTML visual that looks like a Canva Code infographic.
 
 Rules:
@@ -687,6 +689,7 @@ Rules:
 - Do not use JavaScript.
 - Do not include markdown code fences or any text outside the JSON object.`;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildVisualUserPrompt(
   topic: string,
   studyPack: StudyPack,
@@ -893,6 +896,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function normalizeVisualHtml(html: string): string {
   // Models sometimes load Tailwind as a stylesheet link instead of a script.
   return html.replace(
@@ -905,44 +909,11 @@ export async function htmlVisualAgent(
   topic: string,
   studyPack: StudyPack,
   classification: Classification,
-  model: ModelPreference = "auto"
+  _model: ModelPreference = "auto"
 ): Promise<{ title: string; html: string } | null> {
-  if (model === "fallback") {
-    return buildFastHtmlVisual(topic, studyPack, classification);
-  }
-
-  const userPrompt = buildVisualUserPrompt(topic, studyPack, classification);
-
-  try {
-    const llmPromise = callFireworks(
-      [
-        { role: "system", content: VISUAL_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      true,
-      2500,
-      model
-    );
-
-    const timeoutPromise = new Promise<string>((_, reject) =>
-      setTimeout(() => reject(new Error("Visual generation timed out")), VISUAL_LLM_TIMEOUT_MS)
-    );
-
-    const content = await Promise.race([llmPromise, timeoutPromise]);
-    const parsed = extractJson<{ title: string; html: string }>(content);
-
-    if (parsed?.html && parsed.html.trim().length > 200) {
-      let html = normalizeVisualHtml(parsed.html.trim());
-      if (!html.toLowerCase().startsWith("<!doctype")) {
-        html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>${escapeHtml(parsed.title || topic)}</title>\n<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,\\"Segoe UI\\",Roboto,sans-serif;margin:0;padding:16px;background:#f8fafc;}</style>\n</head>\n<body>\n${html}\n</body>\n</html>`;
-      }
-      return { title: parsed.title || `${topic} Visual`, html };
-    }
-  } catch (err) {
-    console.warn("AI visual generation failed or timed out, falling back to template", err);
-  }
-
-  // Fast fallback: reliable, instant visual with icons, lines, and shapes.
+  void _model;
+  // Keep visual requests responsive in the chat. The deterministic template is
+  // safer than waiting on a second LLM call after materials have already been built.
   return buildFastHtmlVisual(topic, studyPack, classification);
 }
 

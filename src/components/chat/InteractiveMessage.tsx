@@ -1,14 +1,12 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import type { InteractivePayload } from "@/lib/types";
-
-const FlashcardDeck = dynamic(() => import("./widgets/FlashcardDeck"), { ssr: false });
-const MiniQuiz = dynamic(() => import("./widgets/MiniQuiz"), { ssr: false });
-const InfoCards = dynamic(() => import("./widgets/InfoCards"), { ssr: false });
-const ComparisonTable = dynamic(() => import("./widgets/ComparisonTable"), { ssr: false });
-const StudyPackActions = dynamic(() => import("./widgets/StudyPackActions"), { ssr: false });
-const HtmlVisual = dynamic(() => import("./widgets/HtmlVisual"), { ssr: false });
+import FlashcardDeck from "./widgets/FlashcardDeck";
+import MiniQuiz from "./widgets/MiniQuiz";
+import InfoCards from "./widgets/InfoCards";
+import ComparisonTable from "./widgets/ComparisonTable";
+import StudyPackActions from "./widgets/StudyPackActions";
+import HtmlVisual from "./widgets/HtmlVisual";
 
 interface InteractiveMessageProps {
   payload: InteractivePayload;
@@ -20,7 +18,7 @@ export default function InteractiveMessage({ payload, userId }: InteractiveMessa
     case "flashcards":
       return <FlashcardDeck topic={payload.topic} cards={payload.cards} />;
     case "quiz":
-      return <MiniQuiz topic={payload.topic} questions={payload.questions} />;
+      return <MiniQuiz userId={userId} topic={payload.topic} topicId={payload.topicId} questions={payload.questions} />;
     case "info_cards":
       return <InfoCards topic={payload.topic} cards={payload.cards} />;
     case "comparison_table":

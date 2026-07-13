@@ -18,6 +18,23 @@ function computeFileHash(dataUrl: string): string {
   return createHash("sha256").update(dataUrl).digest("hex");
 }
 
+function sanitizeOcrText(text: string): string {
+  const firstCut = text
+    .split(/\n(?:First line:|Then centered\/spanning:|In OCR for notes|I think the safest|The safest approach)/i)[0]
+    .trim();
+
+  const lines = firstCut
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^(main content|no markdown|output format|example):?$/i.test(line))
+    .filter((line) => !/^your task:/i.test(line))
+    .filter((line) => !/^do not /i.test(line))
+    .filter((line) => !/^preserve /i.test(line));
+
+  return lines.join("\n").trim();
+}
+
 export async function POST(req: NextRequest) {
   let requestId: string | null = null;
   try {
@@ -88,6 +105,8 @@ No markdown, no code fences, no explanations, no summaries.`;
       const fallbackPrompt = "Transcribe all text visible in this image exactly as it appears. Output each distinct line as a numbered item (1. line, 2. line, ...). Output only the numbered transcription.";
       extractedText = await callFireworksVision(image, fallbackPrompt, 2000);
     }
+
+    extractedText = sanitizeOcrText(extractedText || "");
 
     if (!extractedText || extractedText.trim().length < 5) {
       if (requestId) {
