@@ -1,5 +1,4 @@
 const DEFAULT_MODEL = process.env.FIREWORKS_MODEL || "accounts/fireworks/models/deepseek-v4-flash";
-const FALLBACK_MODEL = process.env.FIREWORKS_FALLBACK_MODEL || "accounts/fireworks/models/deepseek-v4-flash";
 const FALLBACK_SERVERLESS_MODEL = "accounts/fireworks/models/deepseek-v4-flash";
 const VISION_MODEL = process.env.FIREWORKS_VISION_MODEL || "accounts/fireworks/models/kimi-k2p6";
 const REQUEST_TIMEOUT_MS = 60000;
@@ -86,14 +85,12 @@ function resolveGemmaConfig(preference: "gemma-3" | "gemma-4") {
   const publicModel = isGemma4 ? GEMMA_4_MODEL_NAME : GEMMA_3_MODEL_NAME;
   const explicitEndpoint = isGemma4 ? GEMMA_4_ENDPOINT : GEMMA_3_ENDPOINT;
 
-  // If a deployment ID like `accounts/<account>/deployments/<id>` is provided,
-  // derive the deployment-specific endpoint. Fireworks deployments do NOT work
-  // through the generic `/chat/completions` endpoint with that string as model.
+  // Fireworks deployments are served through the generic chat completions
+  // endpoint with the deployment resource name as `model`.
   const deploymentMatch = deployment?.match(/^accounts\/([^/]+)\/deployments\/([^/]+)$/);
   if (deploymentMatch) {
-    const [, account, deploymentId] = deploymentMatch;
     return {
-      endpoint: explicitEndpoint || `https://api.fireworks.ai/inference/v1/accounts/${account}/deployments/${deploymentId}/chat/completions`,
+      endpoint: explicitEndpoint || "https://api.fireworks.ai/inference/v1/chat/completions",
       modelName: deployment,
       fallbackModel: publicModel,
     };
@@ -273,7 +270,7 @@ function extractNumberedList(rawText: string): string[] | null {
   for (const rawLine of rawText.split(/\r?\n/)) {
     const match = /^\s*\d+[\.)]\s+(.*)$/.exec(rawLine);
     if (!match) continue;
-    let line = stripSurroundingQuotes(match[1].trim());
+    const line = stripSurroundingQuotes(match[1].trim());
     if (line) lines.push(line);
   }
   return lines.length >= 3 ? lines : null;
