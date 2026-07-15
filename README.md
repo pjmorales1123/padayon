@@ -1,226 +1,212 @@
 # PADAYON
 
-**Tagline:** Creating solutions for educational problems with AI
+AI learning partner for Filipino students.
 
-## Problem
+PADAYON turns messy notes, uploaded photos, PDFs, and student questions into organized, curriculum-aligned study materials. It teaches through translanguaging, remembers learner progress, and shows which major AI runtime handled each response.
 
-Students often struggle with:
-- Disorganized notes and messy study materials
-- Difficulty understanding academic English
-- No personalized learning path or memory of past sessions
-- Lack of curriculum-aligned study resources
+## Live Links
 
-## Solution
+- Live demo: https://padayon-theta.vercel.app
+- GitHub repository: https://github.com/pjmorales1123/padayon
+- Usage guide: [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md)
+- Demo readiness notes: [docs/demo-readiness-report.md](docs/demo-readiness-report.md)
 
-PADAYON is an AI learning partner that turns messy student input into organized, curriculum-aligned learning materials while teaching through the language students understand best.
+## Why It Matters
 
-**Key features:**
-- Automatic subject/topic detection from messy notes or keywords
-- Curriculum alignment to a seeded Budget of Work
-- Auto-generation of clean notes, reviewer, flashcards, quiz, summary, and story
-- Translanguaging teaching (e.g., Cebuano-first, then academic English)
-- Persistent memory that grows with the learner
-- Retrieval of saved materials across sessions
-- Quiz submission with real score tracking and progress visualization
-- Editable learner profile (name, language confidence, learning style, strengths, weaknesses)
-- Conversation history awareness for more coherent teaching responses
-- Explicit recovery states: loading, slow, error, retry, empty, and fallback
-- Smart import validation: up to 10 files, 12 MB each, images and PDFs only
+Many Filipino students study in English even when they understand lessons better first in Cebuano, Filipino, or another local language. They also use AI tools already, but often for shortcut answers instead of durable learning.
 
-## How it uses AMD / Fireworks / Gemma
+PADAYON redirects that behavior into a guided study workflow:
 
-- **Primary Model:** **Gemma 4 31B Instruct** via Fireworks AI. Fireworks is an AMD partner and runs Gemma inference on AMD-powered infrastructure, satisfying the hackathon's AMD compute requirement.
-- **AI Runtime:** Fireworks AI API — the production runtime for all seven agents (classifier, curriculum, organizer, material creator, teacher, assessment, memory).
-- **Fallback Model:** `deepseek-v4-flash` — fast, serverless Fireworks chat model that takes over automatically if the Gemma endpoint is scaled down or unavailable, keeping the demo stable.
-- **Model Toggle:** The chat UI defaults to **Gemma 4** and also lets you switch to **Fallback · DeepSeek V4 Flash**. The runtime badge always shows the actual model provider (`Gemma 4 · AMD/Fireworks`, `DeepSeek V4 Flash · Fireworks`, or `Fallback · Fireworks`).
-- **AMD Developer Cloud:** The architecture is also designed to accept a self-hosted Gemma endpoint on an AMD GPU pod via `GEMMA_4_ENDPOINT` when available.
+- organize messy notes into subjects and topics
+- align topics with a seeded Grade 9 curriculum/Budget of Work
+- generate reviewers, clean notes, flashcards, quizzes, stories, summaries, and visual guides
+- explain concepts in the learner's strongest language first, then connect back to academic English
+- track confidence, quiz scores, strengths, weaknesses, and topic progress over time
+
+## Core Features
+
+- Chat-based learning assistant with image/PDF upload support
+- Automatic topic detection and curriculum alignment
+- Persistent library of generated learning materials
+- Learner profiles for demo personas and new users
+- Quiz scoring with learner summary updates
+- Visual guide generation for visual learners
+- Backend agent monitor focused on meaningful agents and actual runtime
+- Gemma 4 via Fireworks AI when scaled up, with Fireworks fallback for reliability
+
+## How PADAYON Uses Gemma, Fireworks, and AMD
+
+PADAYON supports Gemma 4 through Fireworks AI on-demand deployments. The app routes chat requests to the configured Gemma deployment when the Gemma toggle is selected and the deployment is ready.
+
+- Primary demo path: `GEMMA_4_DEPLOYMENT` using Fireworks' OpenAI-compatible chat completions endpoint
+- Fallback path: `FIREWORKS_MODEL` / `FIREWORKS_FALLBACK_MODEL` for stable demos if Gemma is scaled down or unavailable
+- Runtime visibility: the chat UI and backend monitor show whether a response used Gemma or fallback
+- Credit safety: `scripts/gemma4-scale.js` can scale Gemma up before a demo and down after testing
 
 ## Agent Architecture
 
-1. **Classifier Agent** — detects subject, topic, intent, and language from student input
-2. **Curriculum Alignment Agent** — matches topic to seeded curriculum/Budget of Work
-3. **Organizer Agent** — saves data into the correct subject/topic folders in Supabase
-4. **Material Creator Agent** — generates clean notes, reviewer, flashcards, quiz, and summary
-5. **Teaching Agent** — explains using translanguaging (confident language first, then English)
-6. **Assessment Agent** — short quizzes with hints and kind explanations
-7. **Memory Agent** — updates learner profile based on interactions
+PADAYON is organized as a multi-agent learning system:
 
-## Setup Instructions
+1. Classifier Agent detects subject, topic, intent, and language.
+2. Curriculum Alignment Agent maps the topic to the seeded curriculum.
+3. Organizer Agent saves uploaded/source content into the right learner topic.
+4. Material Creator Agent builds study materials such as notes, reviewers, flashcards, quizzes, summaries, stories, and visuals.
+5. Teaching Agent explains with translanguaging and student-friendly pacing.
+6. Assessment Agent handles quiz practice, hints, feedback, and scores.
+7. Memory Agent updates learner profile, confidence, strengths, weaknesses, and progress.
 
-1. Clone the repository
-2. Copy `.env.example` to `.env.local` and fill in your credentials:
-   ```powershell
-   cp .env.example .env.local
-   ```
-   Example values are in `.env.example`:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=
-   SUPABASE_SERVICE_ROLE_KEY=
-   FIREWORKS_API_KEY=
-   FIREWORKS_MODEL=accounts/fireworks/models/deepseek-v4-flash
-   FIREWORKS_FALLBACK_MODEL=accounts/fireworks/models/kimi-k2p5
+The demo monitor intentionally highlights the meaningful learning agents and the actual model runtime instead of noisy internal process steps.
 
-   # Optional: Gemma endpoint for the demo toggle
-   # For Fireworks on-demand, use GEMMA_3_DEPLOYMENT (preferred):
-   GEMMA_3_DEPLOYMENT=accounts/<account>/deployments/<deployment-id>
-   GEMMA_4_DEPLOYMENT=
-   # For external/custom endpoints, use GEMMA_3_ENDPOINT + GEMMA_API_KEY:
-   GEMMA_3_ENDPOINT=
-   GEMMA_4_ENDPOINT=
-   GEMMA_API_KEY=    # falls back to FIREWORKS_API_KEY if empty
-   ```
-3. Run the database migrations. You have two options:
-   - **Option A:** Open `supabase/migrations/001_initial.sql` in the Supabase dashboard SQL editor and run it.
-   - **Option B:** From a machine with direct Postgres access, run:
-     ```powershell
-     $env:DATABASE_URL="postgresql://user:password@host:5432/db"
-     npm run migrate
-     ```
-4. Seed the curriculum and demo user:
-   ```powershell
-   Invoke-RestMethod -Uri "http://localhost:3000/api/seed" -Method POST -Body '{"userId":"demo-user-id"}' -ContentType "application/json"
-   ```
-5. Install dependencies:
-   ```powershell
-   npm install
-   ```
-6. Run the dev server:
-   ```powershell
-   npm run dev
-   ```
+## Quick Start
 
-## Environment Variables
+### 1. Install dependencies
 
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
-| `DATABASE_URL` | Direct Postgres connection string (only needed for `npm run migrate`) |
-| `FIREWORKS_API_KEY` | Fireworks AI API key |
-| `FIREWORKS_MODEL` | Default serverless model ID (default: kimi-k2p6) |
-| `FIREWORKS_FALLBACK_MODEL` | Fallback serverless model ID (default: kimi-k2p6) |
-| `GEMMA_4_DEPLOYMENT` | Fireworks on-demand deployment name for Gemma 4 (optional) |
-| `GEMMA_4_ENDPOINT` | External OpenAI-compatible endpoint for Gemma 4 (optional) |
-| `GEMMA_API_KEY` | API key for the Gemma endpoint (optional, falls back to FIREWORKS_API_KEY) |
+```powershell
+cd C:\Users\Admin\padayon
+npm install
+```
 
-## Persona-Preserving Navigation
+### 2. Configure environment variables
 
-Every primary link carries the selected `userId` query parameter, so switching between Home, Live Demo, Chat, Library, Profile, and Topic keeps the current learner context. The shared `AppNavigation` component builds query-aware hrefs and warns before leaving a page that is still working.
+Copy the example file:
 
-## Actual-Runtime Badge
+```powershell
+Copy-Item .env.example .env.local
+```
 
-After each assistant reply, the chat header shows the model that actually served the request:
+Fill in:
 
-- `Gemma 4 · AMD/Fireworks` — the Gemma endpoint responded and fallback was not used.
-- `DeepSeek V4 Flash · Fireworks` — the **Fallback · DeepSeek V4 Flash** toggle was selected and responded directly.
-- `Fallback · Fireworks` — Gemma 4 was requested but unreachable, so the request fell back to Fireworks.
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=
 
-The badge is driven by `model_runtime` returned from `/api/agent`, not by the UI toggle alone.
+FIREWORKS_API_KEY=
+FIREWORKS_MODEL=accounts/fireworks/models/deepseek-v4-flash
+FIREWORKS_FALLBACK_MODEL=accounts/fireworks/models/deepseek-v4-flash
+FIREWORKS_VISION_MODEL=accounts/fireworks/models/kimi-k2p6
 
-## Demo Flow
+GEMMA_4_DEPLOYMENT=
+GEMMA_4_ENDPOINT=
+GEMMA_API_KEY=
+```
 
-1. **Messy Notes:** Student types `photosynthesis chlorophyll sunlight CO2 oxygen glucose food important`
-2. **Organization:** AI detects Science → Biology → Photosynthesis and saves it
-3. **Materials:** AI creates clean notes, reviewer, flashcards, and quiz
-4. **Library:** Student views saved topic and materials in the Library
-5. **Translanguaging:** Student asks `unsa diay ang photosynthesis?` and gets Cebuano-first explanation
-6. **Model toggle:** Switch from the default **Gemma 4** to **Fallback · DeepSeek V4 Flash** in the chat header, then switch back to **Gemma 4**
-7. **Retrieval:** Student starts new chat and says `show my flashcards` — saved flashcards are retrieved
-8. **Quiz:** Student takes the quiz; score is saved and progress is updated
-9. **Profile:** Learning profile shows updated language confidence, strengths, weaknesses, and can be edited
+Never commit real API keys. Keep production secrets in Vercel/Supabase/Fireworks dashboards.
 
-## Fallback-First Demo Rehearsal
+### 3. Set up Supabase
 
-Before testing Gemma, rehearse and verify the fallback path:
+Run the initial migration in the Supabase SQL editor:
 
-1. Start the app with only `FIREWORKS_API_KEY` set (no Gemma endpoint).
-2. Select any demo persona and send a judge prompt.
-3. Confirm the learning trail completes and the badge reads `Fallback · Fireworks`.
-4. Switch the model toggle to **Gemma 4** and send another prompt.
-5. Confirm the response still succeeds and the badge reads `Fallback · Fireworks`.
-6. Only after the fallback path passes should you configure a real Gemma endpoint for Gate 2.
+```text
+supabase/migrations/001_initial.sql
+```
 
-## Gemma Demo Setup
+Or run it from a machine with direct database access:
 
-The production architecture is AMD-ready through Fireworks AI (an AMD partner) and AMD Developer Cloud. The current demo uses available Fireworks serverless models for reliability, with Gemma endpoints supported when accessible.
+```powershell
+$env:DATABASE_URL="postgresql://user:password@host:5432/postgres"
+npm run migrate
+```
 
-### Gemma Gate
+Seed demo data while the app is running:
 
-Do not claim Gemma is verified until:
-- `/api/health` returns `gemma4Configured: true`
-- A prompt sent with **Gemma 4** returns `model_runtime: { provider: "gemma", fallback: false }`
-- A controlled unavailable Gemma target falls back to Fireworks with `model_runtime: { requested: "gemma-4", provider: "fireworks", fallback: true }`
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/seed" -Method POST -Body '{"userId":"demo-user-id"}' -ContentType "application/json"
+```
 
-Run fallback verification first, then Gemma verification, and record the results in `docs/demo-readiness-report.md`.
+### 4. Run locally
 
-### AMD Developer Cloud GPU pod (best for the AMD track)
+```powershell
+npm run dev
+```
 
-1. Deploy Gemma 4 on your allocated AMD GPU pod (vLLM + ROCm or Ollama).
-2. Copy the pod's chat completions URL into `GEMMA_4_ENDPOINT`.
-3. Set `GEMMA_API_KEY` if needed.
-4. In the chat UI, choose **Gemma 4**. If the endpoint is unreachable, PADAYON falls back to the Fireworks serverless model.
+Open http://localhost:3000.
 
-### Fireworks on-demand (alternative if AMD pod is not available)
+## Demo Walkthrough
 
-1. Create a deployment (run this in a terminal with `FIREWORKS_API_KEY` set):
-   ```bash
-   curl -X POST "https://api.fireworks.ai/v1/accounts/<YOUR_ACCOUNT_ID>/deployments" \
-     -H "Authorization: Bearer $FIREWORKS_API_KEY" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "baseModel": "accounts/fireworks/models/gemma-4-31b-it",
-       "acceleratorCount": 1,
-       "minReplicaCount": 0,
-       "maxReplicaCount": 1,
-       "autoscalingPolicy": { "scaleToZeroWindow": "300s" }
-     }'
-   ```
-2. Copy the returned deployment name into `GEMMA_4_DEPLOYMENT`.
-3. Restart the app so it picks up the env var.
-4. In the chat UI, choose **Gemma 4**. If the deployment is scaled down or fails, PADAYON automatically falls back to the serverless model.
+Use the full guide in [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md). A short judge-friendly flow:
 
-### Scale to zero between sessions (important — on-demand GPUs bill by uptime)
+1. Open the live demo and choose or create a learner profile.
+2. Upload a photo of notes or type messy notes such as `photosynthesis chlorophyll sunlight CO2 oxygen glucose food important`.
+3. Ask PADAYON to explain the topic in Cebuano/Filipino plus English.
+4. Ask for flashcards, a quiz, or a visual guide.
+5. Open the Library to confirm materials were saved.
+6. Take a quiz and check the Learner Summary/Profile updates.
+7. Switch to Gemma 4 for the model-runtime demo when the deployment is scaled up.
 
-```bash
-# Scale down to stop billing
-node scripts/gemma4-scale.js down
+## Gemma Scaling Commands
 
-# Check status
-node scripts/gemma4-scale.js status
+Scale Gemma up before a demo:
 
-# Scale up before a demo (then wait ~2–4 minutes for READY)
+```powershell
 node scripts/gemma4-scale.js up
 ```
 
-### Fallback only
+Check readiness:
 
-If you have no Gemma endpoint, the toggle still works but will fall back to the serverless model. This keeps the demo stable but does not qualify for the Gemma award.
+```powershell
+node scripts/gemma4-scale.js status
+```
 
-## Tech Stack
+Scale down after testing to save credits:
 
-- Next.js 16.2.10 (App Router)
-- React 19.2.4
-- TypeScript
-- Tailwind CSS 4
-- Supabase (Postgres)
-- Fireworks AI API + optional Gemma endpoint
-- Vitest + Testing Library
-- Docker (submission)
+```powershell
+node scripts/gemma4-scale.js down
+```
+
+Expected Gemma proof:
+
+- `/api/health` reports Gemma configured
+- a Gemma-selected chat response returns runtime provider `gemma`
+- if Gemma is unavailable, the response succeeds through Fireworks fallback and the UI says fallback
+
+## Docker
+
+Build and run:
+
+```powershell
+docker build -t padayon .
+docker run --env-file .env.local -p 3000:3000 padayon
+```
+
+For the current PADAYON web submission, the public demo is deployed on Vercel. If a submission form requires a Docker image but the selected track does not require one, use `N/A` and point evaluators to the live Vercel app and public GitHub repository.
+
+## Deployment
+
+PADAYON is designed for Vercel:
+
+1. Import `https://github.com/pjmorales1123/padayon` into Vercel.
+2. Add the environment variables from `.env.example`.
+3. Confirm Supabase migrations are applied.
+4. Deploy the Next.js app.
+5. Test upload, chat, material creation, quiz scoring, learner summary updates, and Gemma/fallback runtime labels.
+
+Current demo URL:
+
+```text
+https://padayon-theta.vercel.app
+```
 
 ## Development Commands
 
 ```powershell
-npm test
 npm run lint
+npm test
 npm run build
 ```
 
-## Submission
+## Submission Notes
 
-Build and run the Docker image:
-```powershell
-docker build -t padayon .
-docker run -p 3000:3000 padayon
-```
+Suggested submission fields:
+
+- Title: `PADAYON: AI Learning Partner`
+- Short description: `PADAYON helps Filipino students turn messy notes, photos, and questions into curriculum-aligned study materials, quizzes, visuals, and personalized explanations using Gemma, Fireworks AI, and learner memory.`
+- Categories: Education, EdTech, AI Agents, Multilingual AI, Natural Language Processing, Student Productivity
+- Technologies: Next.js, React, TypeScript, Tailwind CSS, Supabase, Fireworks AI, Gemma 4, AMD-backed inference, Vercel, Docker, Vitest, Testing Library
+- Repository: https://github.com/pjmorales1123/padayon
+- Demo URL: https://padayon-theta.vercel.app
+
+## License
+
+Hackathon prototype. Add a formal license before broader public reuse.
